@@ -1,0 +1,26 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: guijian-guangxi
+
+app:
+  # 内容层目录（仓库根 content/）；生产部署时改为服务器绝对路径
+  content:
+    path: ../content
+  llm:
+    # stub | zhipu——演示模式无需 Key；接入智谱：LLM_PROVIDER=zhipu + LLM_API_KEY=xxx
+    provider: ${LLM_PROVIDER:stub}
+    base-url: ${LLM_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:glm-4-flash}                  # 文本对话/流式（免费档）
+    vision-model: ${LLM_VISION_MODEL:glm-4v-flash}   # 多模态识景（免费档）
+    embedding-model: ${LLM_EMBEDDING_MODEL:embedding-3}  # RAG 向量
+  tts:
+    provider: ${TTS_PROVIDER:stub}    # 讲解员朗读当前走前端 speechSynthesis，后端 TTS 预留
+    api-key: ${TTS_API_KEY:}
+
+logging:
+  level:
+    com.guijian.guangxi: INFO
