@@ -30,10 +30,12 @@ import 'echarts-gl'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import flags from '@/config/feature.flags'
+import { welcomeOnce } from '@/composables/useVoice'
 
 const MAP_NAME = 'guangxi'
 const chartRef = ref(null)
 const store = useAppStore()
+const emit = defineEmits(['drill'])
 let chart = null
 
 /** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
@@ -96,13 +98,21 @@ function onChartClick(params) {
   const city = resolveCity(params)
   if (!city) return
   store.selectCity(city)
-  ElMessage.success(`${city.welcome}　——${city.slogan}`)
+  // 下钻转场本身就是视觉反馈；语音欢迎由 HomeView 在进入城市时触发
+  emit('drill', city)
 }
 
-/** 图例是 100% 可靠的辅助入口：拾取失败/演示紧张时都能一键选城 */
+function onChartMouseOver(params) {
+  // hover 城市区域的欢迎彩蛋：每会话每城只播一次
+  if (params.componentType === 'geo3D') {
+    welcomeOnce(store.cities.find((c) => c.fullName === params.name))
+  }
+}
+
+/** 图例是 100% 可靠的辅助入口：拾取失败/演示紧张时都能一键下钻 */
 function selectFromLegend(city) {
   store.selectCity(city)
-  ElMessage.success(`${city.welcome}　——${city.slogan}`)
+  emit('drill', city)
 }
 
 function buildOption(geojson, cities) {
@@ -192,6 +202,7 @@ onMounted(async () => {
     chart = echarts.init(chartRef.value)
     chart.setOption(buildOption(geojson, store.cities))
     chart.on('click', onChartClick)
+    chart.on('mouseover', onChartMouseOver)
     window.addEventListener('resize', handleResize)
     // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
     if (import.meta.env.DEV) window.__mapChart = chart

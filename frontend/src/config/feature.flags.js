@@ -9,8 +9,8 @@ export default {
   map2DFallback: true,  // 2D SVG 降级地图（答辩无 WebGL 时切换）
 
   // --- P1 骨肉 ---
-  voiceWelcome: false,  // hover 城市欢迎语音"XX欢迎您"
-  cityDrilldown: false, // 城市下钻转场动画
+  voiceWelcome: true,   // hover/进入城市时欢迎语音"XX欢迎您"（speechSynthesis 本地方案）
+  cityDrilldown: true,  // 城市下钻转场动画
 
   // --- P2 智能 ---
   awakenVideo: false,   // "唤醒风景"：静照切 AI 图生视频
