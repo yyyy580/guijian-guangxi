@@ -6,6 +6,9 @@
     </Transition>
 
     <AttractionCard v-if="store.currentAttraction" />
+
+    <!-- 全局知识问答浮窗（不随卡片开关销毁，会话保留） -->
+    <ChatPanel v-if="flags.ragChat" />
   </div>
 </template>
 
@@ -14,6 +17,7 @@ import { onMounted } from 'vue'
 import MapStage from '@/components/MapStage.vue'
 import CityMap from '@/components/CityMap.vue'
 import AttractionCard from '@/components/AttractionCard.vue'
+import ChatPanel from '@/components/ChatPanel.vue'
 import flags from '@/config/feature.flags'
 import { useAppStore } from '@/stores/app'
 import { welcomeOnce } from '@/composables/useVoice'

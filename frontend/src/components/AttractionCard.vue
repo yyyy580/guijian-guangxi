@@ -40,9 +40,13 @@
           </el-tab-pane>
         </el-tabs>
 
+        <!-- AI 讲解员（流式字幕 + 语音朗读） -->
+        <NarratorBox v-if="flags.ttsNarrator" />
+
+        <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
         <div class="pending-ai">
-          <span>AI 讲解员 / 唤醒风景</span>
-          <em>P2 能力即将点亮</em>
+          <span>唤醒风景 · 静照变 AI 视频</span>
+          <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
         </div>
       </div>
     </article>
@@ -52,6 +56,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
+import NarratorBox from '@/components/NarratorBox.vue'
+import flags from '@/config/feature.flags'
 
 const store = useAppStore()
 const attraction = computed(() => store.currentAttraction)

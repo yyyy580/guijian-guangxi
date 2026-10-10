@@ -13,7 +13,7 @@ export default {
   cityDrilldown: true,  // 城市下钻转场动画
 
   // --- P2 智能 ---
-  awakenVideo: false,   // "唤醒风景"：静照切 AI 图生视频
-  ragChat: false,       // RAG 知识问答
-  ttsNarrator: false,   // AI 讲解员语音解说
+  awakenVideo: false,   // "唤醒风景"：静照切 AI 图生视频（素材预生成中，暂不点亮）
+  ragChat: true,        // RAG 知识问答（stub 演示模式可用，配 Key 后走真实大模型）
+  ttsNarrator: true,    // AI 讲解员：流式讲解词字幕 + speechSynthesis 朗读
 }
