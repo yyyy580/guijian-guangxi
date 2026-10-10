@@ -18,6 +18,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 智谱 AI 适配器（open.bigmodel.cn）：
@@ -73,8 +75,14 @@ public class ZhipuLlmAdapter implements LlmAdapter {
             HttpRequest request = builder("/chat/completions", Duration.ofSeconds(120))
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
                     .build();
+            HttpResponse<Stream<String>> resp = client.send(request, HttpResponse.BodyHandlers.ofLines());
+            if (resp.statusCode() != 200) {
+                // 鉴权失败/欠费等：把智谱的真实错误抛出去，前端才能给出准确提示
+                throw new IOException("智谱接口返回 " + resp.statusCode() + "："
+                        + truncate(resp.body().collect(Collectors.joining())));
+            }
             // 逐行读 SSE：data: {...} / data: [DONE]
-            client.send(request, HttpResponse.BodyHandlers.ofLines()).body().forEach(line -> {
+            resp.body().forEach(line -> {
                 if (!line.startsWith("data:")) {
                     return;
                 }

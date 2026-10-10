@@ -130,7 +130,7 @@ public class AiController {
             return Map.of("error", "识景功能需要配置真实大模型 Key 后可用（当前为演示模式）");
         } catch (Exception e) {
             log.warn("识景失败", e);
-            return Map.of("error", "识景服务暂时不可用，请稍后再试");
+            return Map.of("error", friendly(e));
         }
     }
 
@@ -142,6 +142,7 @@ public class AiController {
     private void stream(SseEmitter emitter, List<ChatMessage> messages, List<Map<String, String>> sources) {
         SSE_EXECUTOR.execute(() -> {
             AtomicBoolean done = new AtomicBoolean(false);
+            AtomicBoolean gotDelta = new AtomicBoolean(false);
             Runnable finish = () -> {
                 if (done.compareAndSet(false, true)) {
                     send(emitter, Map.of("type", "done"));
@@ -157,18 +158,24 @@ public class AiController {
                 llm.chatStream(messages, new LlmAdapter.StreamHandler() {
                     @Override
                     public void onDelta(String delta) {
+                        gotDelta.set(true);
                         send(emitter, Map.of("type", "delta", "text", delta));
                     }
 
                     @Override
                     public void onComplete() {
+                        if (!gotDelta.get()) {
+                            // 流"正常"结束却一个字没吐：多半是 Key/模型配置有误被静默吞掉
+                            send(emitter, Map.of("type", "error", "message",
+                                    "AI 返回了空回答：请检查 API Key 与模型配置"));
+                        }
                         finish.run();
                     }
 
                     @Override
                     public void onError(Throwable t) {
                         log.warn("LLM 流式失败", t);
-                        send(emitter, Map.of("type", "error", "message", "AI 服务暂时不可用，请稍后再试"));
+                        send(emitter, Map.of("type", "error", "message", friendly(t)));
                         finish.run();
                     }
                 });
@@ -177,6 +184,28 @@ public class AiController {
                 finish.run();
             }
         });
+    }
+
+    /**
+     * 把底层异常翻译成用户能看懂、又能定位病因的中文提示。
+     * 演示翻车保险：不暴露堆栈，但保留关键原因（401/429/未配置等）。
+     */
+    private String friendly(Throwable t) {
+        String msg = t.getMessage() == null || t.getMessage().isBlank()
+                ? t.getClass().getSimpleName() : t.getMessage();
+        if (msg.contains("未配置 LLM_API_KEY")) {
+            return "AI 服务未配置：请先设置 LLM_API_KEY 环境变量并重启后端";
+        }
+        if (msg.contains("401")) {
+            return "智谱鉴权失败(401)：API Key 不正确，或账号未完成实名认证";
+        }
+        if (msg.contains("429")) {
+            return "请求过于频繁(429)：请稍等几秒再试";
+        }
+        if (msg.contains("timed out") || msg.contains("超时") || msg.contains("Connection") || msg.contains("连接")) {
+            return "网络连接智谱失败：请检查网络后重试";
+        }
+        return "AI 服务异常：" + (msg.length() > 100 ? msg.substring(0, 100) + "…" : msg);
     }
 
     private void finishWithError(SseEmitter emitter, String message) {
