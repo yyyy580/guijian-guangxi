@@ -26,7 +26,7 @@
         <h2 :style="{ color: city.color }">{{ city.fullName }}</h2>
         <p>{{ city.slogan }}</p>
       </div>
-      <p class="hint">点击景点标记查看故事</p>
+      <p class="hint">左键点击景点标记，查看它的故事</p>
     </header>
   </div>
 </template>
@@ -100,7 +100,7 @@ function buildOption(geojson) {
         type: 'scatter3D',
         coordinateSystem: 'geo3D',
         data: spots,
-        symbolSize: 18,
+        symbolSize: 24,
         label: {
           show: true,
           position: 'top',

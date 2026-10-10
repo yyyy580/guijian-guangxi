@@ -4,21 +4,7 @@
 
     <header class="stage-hud">
       <h1 class="stage-title">桂见<span class="accent">广西</span></h1>
-      <p class="stage-sub">拖动旋转 · 滚轮缩放 · 点击四色光柱探索城市</p>
-      <ul class="stage-legend">
-        <li
-          v-for="c in store.cities"
-          :key="c.id"
-          class="legend-btn"
-          :class="{ active: store.currentCity?.id === c.id }"
-          :style="{ '--city-color': c.color }"
-          @click="selectFromLegend(c)"
-        >
-          <i :style="{ background: c.color }" />
-          <span>{{ c.name }}</span>
-          <em>{{ c.colorName }}</em>
-        </li>
-      </ul>
+      <p class="stage-sub">拖动旋转 · 滚轮缩放 · 左键点击城市光柱探索城市</p>
     </header>
   </div>
 </template>
@@ -107,12 +93,6 @@ function onChartMouseOver(params) {
   if (params.componentType === 'geo3D') {
     welcomeOnce(store.cities.find((c) => c.fullName === params.name))
   }
-}
-
-/** 图例是 100% 可靠的辅助入口：拾取失败/演示紧张时都能一键下钻 */
-function selectFromLegend(city) {
-  store.selectCity(city)
-  emit('drill', city)
 }
 
 function buildOption(geojson, cities) {
@@ -267,44 +247,5 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--text-dim);
   letter-spacing: 1px;
-}
-
-.stage-legend {
-  display: flex;
-  gap: 18px;
-  margin-top: 16px;
-  list-style: none;
-}
-
-.stage-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  pointer-events: auto;
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  transition: all 0.25s ease;
-}
-
-.stage-legend li:hover,
-.stage-legend li.active {
-  border-color: var(--city-color, rgba(125, 211, 252, 0.5));
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.stage-legend i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
-}
-
-.stage-legend em {
-  font-style: normal;
-  font-size: 11px;
-  color: var(--text-dim);
 }
 </style>
