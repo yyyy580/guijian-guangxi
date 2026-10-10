@@ -140,15 +140,15 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   animation: sunGlow 6s ease-in-out infinite alternate;
 }
 
-/* 压暗渐变：顶部透出风景，底部加深托住正文面板 */
+/* 压暗渐变：顶部透出风景，底部加深直接托住正文文字（无面板） */
 .bg-shade {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
     rgba(4, 12, 22, 0.32) 0%,
-    rgba(4, 12, 22, 0.42) 42%,
-    rgba(6, 15, 26, 0.9) 100%
+    rgba(4, 12, 22, 0.5) 42%,
+    rgba(5, 13, 23, 0.94) 100%
   );
 }
 
@@ -227,24 +227,19 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   background: rgba(7, 19, 31, 0.35);
 }
 
+/* 无面板：文字直接映在背景墙上，仅保留栏宽与留白 */
 .panel {
   max-width: 920px;
   margin: 0 auto;
-  background: rgba(7, 19, 31, 0.68);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(125, 211, 252, 0.18);
-  border-radius: 18px;
-  padding: 26px 30px 30px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
 }
 
 .summary {
   font-size: 15px;
   line-height: 1.9;
   color: var(--text-main);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.65);
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(125, 211, 252, 0.15);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.2);
 }
 
 .story-tabs {
@@ -254,8 +249,9 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 .story-tabs p {
   font-size: 14px;
   line-height: 2;
-  color: rgba(232, 241, 248, 0.88);
+  color: rgba(240, 247, 252, 0.94);
   white-space: pre-line;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
 
 .pending-ai {
