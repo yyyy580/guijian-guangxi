@@ -119,7 +119,8 @@ function buildOption(geojson) {
 }
 
 function onChartClick(params) {
-  if (params.componentType === 'scatter3D' && params.data?.attractionId) {
+  // 以数据判据识别景点：scatter3D 事件 params.componentType 恒为 'series'，不能按组件名判断
+  if (params.data?.attractionId) {
     store.openAttraction(store.attractions[params.data.attractionId])
   }
 }

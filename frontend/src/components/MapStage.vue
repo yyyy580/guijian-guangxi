@@ -71,8 +71,11 @@ function buildPillarLayers(cities) {
 }
 
 function resolveCity(params) {
-  if (params.componentType === 'scatter3D' && params.data?.cityId) {
-    return store.cities.find((c) => c.id === params.data.cityId)
+  // echarts 事件参数规则：series（含 scatter3D）的 params.componentType 恒为 'series'，
+  // 真实类型在 params.seriesType。因此以 data.cityId 为可靠判据，geo3D 组件走 name 匹配。
+  const d = params.data
+  if (d?.cityId) {
+    return store.cities.find((c) => c.id === d.cityId)
   }
   if (params.componentType === 'geo3D') {
     return store.cities.find((c) => c.fullName === params.name)
@@ -89,10 +92,8 @@ function onChartClick(params) {
 }
 
 function onChartMouseOver(params) {
-  // hover 城市区域的欢迎彩蛋：每会话每城只播一次
-  if (params.componentType === 'geo3D') {
-    welcomeOnce(store.cities.find((c) => c.fullName === params.name))
-  }
+  // hover 光柱/城市区域的欢迎彩蛋：每会话每城只播一次
+  welcomeOnce(resolveCity(params))
 }
 
 function buildOption(geojson, cities) {
@@ -148,7 +149,7 @@ function buildOption(geojson, cities) {
         type: 'scatter3D',
         coordinateSystem: 'geo3D',
         data: tips,
-        symbolSize: 20,
+        symbolSize: 26,
         label: {
           show: true,
           position: 'top',
