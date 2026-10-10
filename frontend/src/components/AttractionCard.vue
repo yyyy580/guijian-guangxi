@@ -3,9 +3,17 @@
     <article class="attraction-card">
       <button class="close-btn" @click="store.closeAttraction()">×</button>
 
-      <!-- CSS 艺术头图 + Ken Burns（P2 替换实拍/AI素材） -->
+      <!-- 实拍头图优先，CSS 艺术风景兜底；Ken Burns 缓放统一氛围 -->
       <div class="hero" :style="{ '--c': cityColor }">
         <div class="hero-art"></div>
+        <img
+          v-if="cover"
+          class="hero-img"
+          :src="cover"
+          :alt="attraction.name"
+          @error="coverError = true"
+        />
+        <div v-if="cover" class="hero-shade"></div>
         <svg class="hills hills-far" viewBox="0 0 1440 320" preserveAspectRatio="none">
           <path d="M0,224 C240,140 420,190 640,150 C860,110 1080,180 1440,130 L1440,320 L0,320 Z" />
         </svg>
@@ -54,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
 import NarratorBox from '@/components/NarratorBox.vue'
 import flags from '@/config/feature.flags'
@@ -64,6 +72,10 @@ const attraction = computed(() => store.currentAttraction)
 const city = computed(() => store.currentCity)
 const cityColor = computed(() => city.value?.color || 'var(--accent)')
 const tab = ref('geo')
+
+const coverError = ref(false)
+const cover = computed(() => (coverError.value ? '' : attraction.value?.assets?.cover || ''))
+watch(() => attraction.value?.id, () => { coverError.value = false })
 </script>
 
 <style scoped>
@@ -125,6 +137,21 @@ const tab = ref('geo')
     radial-gradient(ellipse at 20% 110%, color-mix(in srgb, var(--c) 50%, #0c2136) 0%, transparent 55%),
     linear-gradient(180deg, #0a1c30 0%, color-mix(in srgb, var(--c) 38%, #0c2136) 62%, color-mix(in srgb, var(--c) 55%, #07131f) 100%);
   animation: kenburns 26s ease-in-out infinite alternate;
+}
+
+.hero-img {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  animation: kenburns 26s ease-in-out infinite alternate;
+}
+
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 12, 22, 0.05) 35%, rgba(4, 12, 22, 0.78) 100%);
 }
 
 .hills {
