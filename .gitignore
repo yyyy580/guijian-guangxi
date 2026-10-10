@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+frontend/node_modules/
+
+# 构建产物
+frontend/dist/
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# 环境变量与密钥（严禁入库）
+.env
+.env.local
+.env.*.local
+backend/.env
+**/application-local.yml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 日志与临时文件
+*.log
+logs/
+tmp/
+.cache/
+
+# 前端构建缓存
+frontend/.vite/
