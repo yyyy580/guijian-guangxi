@@ -4,6 +4,19 @@
     <div class="bg-layer" :style="{ '--c': cityColor }" aria-hidden="true">
       <img v-if="cover" class="bg-img" :src="cover" alt="" @error="coverError = true" />
       <div v-else class="bg-art"></div>
+      <!-- 唤醒视频层：首帧与静照对齐，就绪后淡入实现"无缝唤醒"；懒加载（点击才挂载） -->
+      <video
+        v-if="awakened && !videoError"
+        class="bg-video"
+        :class="{ ready: videoReady }"
+        :src="awakenVideo"
+        autoplay
+        loop
+        muted
+        playsinline
+        @canplay="onVideoReady"
+        @error="onVideoError"
+      ></video>
       <template v-if="!cover">
         <svg class="hills hills-far" viewBox="0 0 1440 320" preserveAspectRatio="none">
           <path d="M0,224 C240,140 420,190 640,150 C860,110 1080,180 1440,130 L1440,320 L0,320 Z" />
@@ -50,11 +63,20 @@
         <!-- AI 讲解员（流式字幕 + 语音朗读） -->
         <NarratorBox v-if="flags.ttsNarrator" />
 
-        <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
-        <div class="pending-ai">
+        <!-- 唤醒风景：静照无缝切 AI 图生视频（点击懒加载，失败回退静照） -->
+        <button
+          class="awaken-btn"
+          :class="{ active: awakened }"
+          :disabled="!flags.awakenVideo"
+          @click="toggleAwaken"
+        >
           <span>唤醒风景 · 静照变 AI 视频</span>
-          <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
-        </div>
+          <em v-if="!flags.awakenVideo">素材生成中，敬请期待</em>
+          <em v-else-if="!awakenVideo">该景点素材准备中</em>
+          <em v-else-if="awakened && !videoReady">唤醒中…</em>
+          <em v-else-if="awakened">回到静照</em>
+          <em v-else>点击唤醒</em>
+        </button>
       </section>
     </div>
   </div>
@@ -62,6 +84,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import NarratorBox from '@/components/NarratorBox.vue'
 import flags from '@/config/feature.flags'
@@ -74,7 +97,46 @@ const tab = ref('geo')
 
 const coverError = ref(false)
 const cover = computed(() => (coverError.value ? '' : attraction.value?.assets?.cover || ''))
-watch(() => attraction.value?.id, () => { coverError.value = false })
+
+// 唤醒风景状态机：idle → loading(视频挂载加载) → playing；可切回静照；出错回退
+const awakened = ref(false)
+const videoReady = ref(false)
+const videoError = ref(false)
+const awakenVideo = computed(() => attraction.value?.assets?.awakenVideo || '')
+
+watch(
+  () => attraction.value?.id,
+  () => {
+    coverError.value = false
+    awakened.value = false
+    videoReady.value = false
+    videoError.value = false
+  }
+)
+
+function toggleAwaken() {
+  if (!flags.awakenVideo) return
+  if (awakened.value) {
+    awakened.value = false
+    return
+  }
+  if (!awakenVideo.value) {
+    ElMessage.info('该景点的唤醒素材准备中')
+    return
+  }
+  videoReady.value = false
+  awakened.value = true // 挂载 <video> 开始懒加载，就绪后淡入
+}
+
+function onVideoReady() {
+  videoReady.value = true
+}
+
+function onVideoError() {
+  videoError.value = true
+  awakened.value = false
+  ElMessage.warning('唤醒失败，已回到静照')
+}
 </script>
 
 <style scoped>
@@ -150,6 +212,21 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
     rgba(4, 12, 22, 0.5) 42%,
     rgba(5, 13, 23, 0.94) 100%
   );
+}
+
+/* 唤醒视频层：就绪后淡入，盖在静照上 */
+.bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.bg-video.ready {
+  opacity: 1;
 }
 
 @keyframes kenburns {
@@ -254,21 +331,44 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
 
-.pending-ai {
+/* 唤醒风景按钮：待机/唤醒中/已唤醒三态 */
+.awaken-btn {
   margin-top: 18px;
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
   border-radius: 10px;
   border: 1px dashed rgba(125, 211, 252, 0.35);
+  background: rgba(7, 19, 31, 0.35);
   color: var(--text-dim);
   font-size: 13px;
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
-.pending-ai em {
+.awaken-btn em {
   font-style: normal;
   color: var(--accent);
+}
+
+.awaken-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--text-main);
+}
+
+.awaken-btn.active {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.14);
+  color: var(--text-main);
+}
+
+.awaken-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 /* Element Plus tabs 深色适配 */
