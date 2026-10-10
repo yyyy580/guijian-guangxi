@@ -1,16 +1,9 @@
 <template>
   <div class="attraction-view">
-    <!-- 实拍头图优先，CSS 艺术风景兜底；Ken Burns 缓放统一氛围 -->
-    <div class="hero" :style="{ '--c': cityColor }">
-      <div class="hero-art"></div>
-      <img
-        v-if="cover"
-        class="hero-img"
-        :src="cover"
-        :alt="attraction.name"
-        @error="coverError = true"
-      />
-      <div class="hero-shade"></div>
+    <!-- 全屏背景墙：实拍图铺满整页固定不动，Ken Burns 缓放；无图时 CSS 艺术风景兜底 -->
+    <div class="bg-layer" :style="{ '--c': cityColor }" aria-hidden="true">
+      <img v-if="cover" class="bg-img" :src="cover" alt="" @error="coverError = true" />
+      <div v-else class="bg-art"></div>
       <template v-if="!cover">
         <svg class="hills hills-far" viewBox="0 0 1440 320" preserveAspectRatio="none">
           <path d="M0,224 C240,140 420,190 640,150 C860,110 1080,180 1440,130 L1440,320 L0,320 Z" />
@@ -20,46 +13,49 @@
         </svg>
         <div class="sun"></div>
       </template>
+      <div class="bg-shade"></div>
+    </div>
 
-      <button class="back-btn" @click="store.closeAttraction()">
-        <span class="arrow">←</span> 返回{{ city.name }}
-      </button>
+    <button class="back-btn" @click="store.closeAttraction()">
+      <span class="arrow">←</span> 返回{{ city.name }}
+    </button>
 
-      <div class="hero-meta">
+    <div class="content">
+      <header class="hero-meta">
         <span class="city-badge" :style="{ background: cityColor }">{{ city.name }} · {{ city.colorName }}</span>
         <h1>{{ attraction.name }}</h1>
         <p class="tags">
           <span v-for="t in attraction.tags" :key="t" class="tag">{{ t }}</span>
         </p>
-      </div>
-    </div>
+      </header>
 
-    <div class="body">
-      <p class="summary">{{ attraction.summary }}</p>
+      <section class="panel">
+        <p class="summary">{{ attraction.summary }}</p>
 
-      <el-tabs v-model="tab" class="story-tabs">
-        <el-tab-pane label="地理科普" name="geo">
-          <p>{{ attraction.narrative.geo }}</p>
-        </el-tab-pane>
-        <el-tab-pane label="民间传说" name="legend">
-          <p>{{ attraction.narrative.legend }}</p>
-        </el-tab-pane>
-        <el-tab-pane label="历史人事" name="history">
-          <p>{{ attraction.narrative.history }}</p>
-        </el-tab-pane>
-        <el-tab-pane label="风物延伸" name="extended">
-          <p>{{ attraction.narrative.extended }}</p>
-        </el-tab-pane>
-      </el-tabs>
+        <el-tabs v-model="tab" class="story-tabs">
+          <el-tab-pane label="地理科普" name="geo">
+            <p>{{ attraction.narrative.geo }}</p>
+          </el-tab-pane>
+          <el-tab-pane label="民间传说" name="legend">
+            <p>{{ attraction.narrative.legend }}</p>
+          </el-tab-pane>
+          <el-tab-pane label="历史人事" name="history">
+            <p>{{ attraction.narrative.history }}</p>
+          </el-tab-pane>
+          <el-tab-pane label="风物延伸" name="extended">
+            <p>{{ attraction.narrative.extended }}</p>
+          </el-tab-pane>
+        </el-tabs>
 
-      <!-- AI 讲解员（流式字幕 + 语音朗读） -->
-      <NarratorBox v-if="flags.ttsNarrator" />
+        <!-- AI 讲解员（流式字幕 + 语音朗读） -->
+        <NarratorBox v-if="flags.ttsNarrator" />
 
-      <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
-      <div class="pending-ai">
-        <span>唤醒风景 · 静照变 AI 视频</span>
-        <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
-      </div>
+        <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
+        <div class="pending-ai">
+          <span>唤醒风景 · 静照变 AI 视频</span>
+          <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -83,20 +79,29 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 
 <style scoped>
 .attraction-view {
+  position: relative;
   width: 100%;
   height: 100%;
   overflow-y: auto;
   background: var(--bg-deep);
 }
 
-/* ---------- Hero：全幅头图 + Ken Burns ---------- */
-.hero {
-  position: relative;
-  height: max(46vh, 340px);
+/* ---------- 背景墙：fixed 铺满整页，滚动时纹丝不动 ---------- */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
   overflow: hidden;
 }
 
-.hero-art {
+.bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: kenburns 26s ease-in-out infinite alternate;
+}
+
+.bg-art {
   position: absolute;
   inset: -6%;
   background:
@@ -104,21 +109,6 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
     radial-gradient(ellipse at 20% 110%, color-mix(in srgb, var(--c) 50%, #0c2136) 0%, transparent 55%),
     linear-gradient(180deg, #0a1c30 0%, color-mix(in srgb, var(--c) 38%, #0c2136) 62%, color-mix(in srgb, var(--c) 55%, #07131f) 100%);
   animation: kenburns 26s ease-in-out infinite alternate;
-}
-
-.hero-img {
-  position: absolute;
-  inset: -6%;
-  width: 112%;
-  height: 112%;
-  object-fit: cover;
-  animation: kenburns 26s ease-in-out infinite alternate;
-}
-
-.hero-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(4, 12, 22, 0.25) 0%, rgba(4, 12, 22, 0.05) 40%, rgba(4, 12, 22, 0.82) 100%);
 }
 
 .hills {
@@ -150,6 +140,18 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   animation: sunGlow 6s ease-in-out infinite alternate;
 }
 
+/* 压暗渐变：顶部透出风景，底部加深托住正文面板 */
+.bg-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(4, 12, 22, 0.32) 0%,
+    rgba(4, 12, 22, 0.42) 42%,
+    rgba(6, 15, 26, 0.9) 100%
+  );
+}
+
 @keyframes kenburns {
   from { transform: scale(1) translate(0, 0); }
   to { transform: scale(1.12) translate(-1.6%, 1.2%); }
@@ -160,11 +162,12 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   to { transform: scale(1.15); opacity: 1; }
 }
 
+/* ---------- 固定返回按钮（滚动时不随内容移动） ---------- */
 .back-btn {
-  position: absolute;
+  position: fixed;
   top: 28px;
   left: 36px;
-  z-index: 5;
+  z-index: 10;
   background: var(--bg-panel);
   color: var(--text-main);
   border: 1px solid rgba(125, 211, 252, 0.35);
@@ -180,11 +183,16 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   background: rgba(56, 189, 248, 0.12);
 }
 
+/* ---------- 前景内容：标题压景深上部，正文入毛玻璃面板 ---------- */
+.content {
+  position: relative;
+  z-index: 1;
+  padding: clamp(110px, 20vh, 220px) 24px 64px;
+}
+
 .hero-meta {
-  position: absolute;
-  left: 36px;
-  bottom: 32px;
-  z-index: 2;
+  max-width: 920px;
+  margin: 0 auto 28px;
 }
 
 .city-badge {
@@ -198,10 +206,10 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 
 .hero-meta h1 {
   margin-top: 14px;
-  font-size: 44px;
+  font-size: clamp(34px, 5vw, 52px);
   font-weight: 700;
   letter-spacing: 6px;
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.65);
 }
 
 .tags {
@@ -214,15 +222,21 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   font-size: 12px;
   padding: 2px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(7, 19, 31, 0.35);
 }
 
-/* ---------- Body ---------- */
-.body {
+.panel {
   max-width: 920px;
   margin: 0 auto;
-  padding: 30px 36px 56px;
+  background: rgba(7, 19, 31, 0.68);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 18px;
+  padding: 26px 30px 30px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
 }
 
 .summary {
