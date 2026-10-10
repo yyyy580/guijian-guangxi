@@ -1,19 +1,17 @@
 <template>
-  <div class="card-mask" @click.self="store.closeAttraction()">
-    <article class="attraction-card">
-      <button class="close-btn" @click="store.closeAttraction()">×</button>
-
-      <!-- 实拍头图优先，CSS 艺术风景兜底；Ken Burns 缓放统一氛围 -->
-      <div class="hero" :style="{ '--c': cityColor }">
-        <div class="hero-art"></div>
-        <img
-          v-if="cover"
-          class="hero-img"
-          :src="cover"
-          :alt="attraction.name"
-          @error="coverError = true"
-        />
-        <div v-if="cover" class="hero-shade"></div>
+  <div class="attraction-view">
+    <!-- 实拍头图优先，CSS 艺术风景兜底；Ken Burns 缓放统一氛围 -->
+    <div class="hero" :style="{ '--c': cityColor }">
+      <div class="hero-art"></div>
+      <img
+        v-if="cover"
+        class="hero-img"
+        :src="cover"
+        :alt="attraction.name"
+        @error="coverError = true"
+      />
+      <div class="hero-shade"></div>
+      <template v-if="!cover">
         <svg class="hills hills-far" viewBox="0 0 1440 320" preserveAspectRatio="none">
           <path d="M0,224 C240,140 420,190 640,150 C860,110 1080,180 1440,130 L1440,320 L0,320 Z" />
         </svg>
@@ -21,43 +19,48 @@
           <path d="M0,288 C200,220 480,260 720,230 C960,200 1200,260 1440,226 L1440,320 L0,320 Z" />
         </svg>
         <div class="sun"></div>
-        <div class="hero-meta">
-          <span class="city-badge" :style="{ background: cityColor }">{{ city.name }} · {{ city.colorName }}</span>
-          <h1>{{ attraction.name }}</h1>
-          <p class="tags">
-            <span v-for="t in attraction.tags" :key="t" class="tag">{{ t }}</span>
-          </p>
-        </div>
+      </template>
+
+      <button class="back-btn" @click="store.closeAttraction()">
+        <span class="arrow">←</span> 返回{{ city.name }}
+      </button>
+
+      <div class="hero-meta">
+        <span class="city-badge" :style="{ background: cityColor }">{{ city.name }} · {{ city.colorName }}</span>
+        <h1>{{ attraction.name }}</h1>
+        <p class="tags">
+          <span v-for="t in attraction.tags" :key="t" class="tag">{{ t }}</span>
+        </p>
       </div>
+    </div>
 
-      <div class="body">
-        <p class="summary">{{ attraction.summary }}</p>
+    <div class="body">
+      <p class="summary">{{ attraction.summary }}</p>
 
-        <el-tabs v-model="tab" class="story-tabs">
-          <el-tab-pane label="地理科普" name="geo">
-            <p>{{ attraction.narrative.geo }}</p>
-          </el-tab-pane>
-          <el-tab-pane label="民间传说" name="legend">
-            <p>{{ attraction.narrative.legend }}</p>
-          </el-tab-pane>
-          <el-tab-pane label="历史人事" name="history">
-            <p>{{ attraction.narrative.history }}</p>
-          </el-tab-pane>
-          <el-tab-pane label="风物延伸" name="extended">
-            <p>{{ attraction.narrative.extended }}</p>
-          </el-tab-pane>
-        </el-tabs>
+      <el-tabs v-model="tab" class="story-tabs">
+        <el-tab-pane label="地理科普" name="geo">
+          <p>{{ attraction.narrative.geo }}</p>
+        </el-tab-pane>
+        <el-tab-pane label="民间传说" name="legend">
+          <p>{{ attraction.narrative.legend }}</p>
+        </el-tab-pane>
+        <el-tab-pane label="历史人事" name="history">
+          <p>{{ attraction.narrative.history }}</p>
+        </el-tab-pane>
+        <el-tab-pane label="风物延伸" name="extended">
+          <p>{{ attraction.narrative.extended }}</p>
+        </el-tab-pane>
+      </el-tabs>
 
-        <!-- AI 讲解员（流式字幕 + 语音朗读） -->
-        <NarratorBox v-if="flags.ttsNarrator" />
+      <!-- AI 讲解员（流式字幕 + 语音朗读） -->
+      <NarratorBox v-if="flags.ttsNarrator" />
 
-        <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
-        <div class="pending-ai">
-          <span>唤醒风景 · 静照变 AI 视频</span>
-          <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
-        </div>
+      <!-- 唤醒风景：静照切 AI 图生视频（素材预生成中） -->
+      <div class="pending-ai">
+        <span>唤醒风景 · 静照变 AI 视频</span>
+        <em>{{ flags.awakenVideo ? '点击唤醒' : '素材生成中，敬请期待' }}</em>
       </div>
-    </article>
+    </div>
   </div>
 </template>
 
@@ -79,53 +82,17 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 </script>
 
 <style scoped>
-.card-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(3, 10, 18, 0.72);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
+.attraction-view {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bg-deep);
 }
 
-.attraction-card {
-  position: relative;
-  width: min(880px, 92vw);
-  max-height: 88vh;
-  overflow: hidden auto;
-  border-radius: 18px;
-  background: var(--bg-panel);
-  border: 1px solid rgba(125, 211, 252, 0.2);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-}
-
-.close-btn {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  z-index: 5;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(7, 19, 31, 0.5);
-  color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: rgba(230, 57, 70, 0.85);
-  border-color: transparent;
-}
-
-/* ---------- Hero：CSS 艺术风景 + Ken Burns ---------- */
+/* ---------- Hero：全幅头图 + Ken Burns ---------- */
 .hero {
   position: relative;
-  height: 300px;
+  height: max(46vh, 340px);
   overflow: hidden;
 }
 
@@ -151,7 +118,7 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 .hero-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(4, 12, 22, 0.05) 35%, rgba(4, 12, 22, 0.78) 100%);
+  background: linear-gradient(180deg, rgba(4, 12, 22, 0.25) 0%, rgba(4, 12, 22, 0.05) 40%, rgba(4, 12, 22, 0.82) 100%);
 }
 
 .hills {
@@ -193,10 +160,30 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
   to { transform: scale(1.15); opacity: 1; }
 }
 
+.back-btn {
+  position: absolute;
+  top: 28px;
+  left: 36px;
+  z-index: 5;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.back-btn:hover {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+}
+
 .hero-meta {
   position: absolute;
-  left: 32px;
-  bottom: 24px;
+  left: 36px;
+  bottom: 32px;
   z-index: 2;
 }
 
@@ -210,15 +197,15 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 }
 
 .hero-meta h1 {
-  margin-top: 12px;
-  font-size: 34px;
+  margin-top: 14px;
+  font-size: 44px;
   font-weight: 700;
-  letter-spacing: 4px;
+  letter-spacing: 6px;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
 }
 
 .tags {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   gap: 8px;
 }
@@ -233,7 +220,9 @@ watch(() => attraction.value?.id, () => { coverError.value = false })
 
 /* ---------- Body ---------- */
 .body {
-  padding: 24px 32px 28px;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 30px 36px 56px;
 }
 
 .summary {

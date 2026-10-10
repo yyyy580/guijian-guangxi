@@ -1,13 +1,16 @@
 <template>
   <div class="home">
+    <!-- 三级视图链：广西省图 → 城市地图 → 景点页，同一镜头感转场 -->
     <Transition name="drill" mode="out-in">
       <MapStage v-if="!store.currentCity" key="province" @drill="onDrill" />
+      <AttractionView
+        v-else-if="store.currentAttraction"
+        :key="store.currentAttraction.id"
+      />
       <CityMap v-else :key="store.currentCity.id" :city="store.currentCity" />
     </Transition>
 
-    <AttractionCard v-if="store.currentAttraction" />
-
-    <!-- 全局知识问答浮窗（不随卡片开关销毁，会话保留） -->
+    <!-- 全局知识问答浮窗（不随视图切换销毁，会话保留） -->
     <ChatPanel v-if="flags.ragChat" />
   </div>
 </template>
@@ -16,13 +19,18 @@
 import { onMounted } from 'vue'
 import MapStage from '@/components/MapStage.vue'
 import CityMap from '@/components/CityMap.vue'
-import AttractionCard from '@/components/AttractionCard.vue'
+import AttractionView from '@/components/AttractionView.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
 import flags from '@/config/feature.flags'
 import { useAppStore } from '@/stores/app'
 import { welcomeOnce } from '@/composables/useVoice'
 
 const store = useAppStore()
+
+if (import.meta.env.DEV) {
+  // 调试入口：无头测试可直接操纵 store 验证视图流转（与 __cityChart 同款约定）
+  window.__store = store
+}
 
 onMounted(async () => {
   const citiesJson = await fetch('/cities.json').then((r) => r.json())
