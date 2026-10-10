@@ -6,7 +6,14 @@
       <h1 class="stage-title">桂见<span class="accent">广西</span></h1>
       <p class="stage-sub">拖动旋转 · 滚轮缩放 · 点击四色光柱探索城市</p>
       <ul class="stage-legend">
-        <li v-for="c in store.cities" :key="c.id">
+        <li
+          v-for="c in store.cities"
+          :key="c.id"
+          class="legend-btn"
+          :class="{ active: store.currentCity?.id === c.id }"
+          :style="{ '--city-color': c.color }"
+          @click="selectFromLegend(c)"
+        >
           <i :style="{ background: c.color }" />
           <span>{{ c.name }}</span>
           <em>{{ c.colorName }}</em>
@@ -51,7 +58,7 @@ function buildRegions(geojson, cities) {
   })
 }
 
-/** 四色光柱：竖直光束（双层辉光）+ 底部光晕 + 顶端可交互光点 */
+/** 四色光柱：竖直光束（双层辉光）+ 底部光晕 + 顶端可交互光球 */
 function buildPillarLayers(cities) {
   const beams = []
   const glows = []
@@ -88,6 +95,12 @@ function resolveCity(params) {
 function onChartClick(params) {
   const city = resolveCity(params)
   if (!city) return
+  store.selectCity(city)
+  ElMessage.success(`${city.welcome}　——${city.slogan}`)
+}
+
+/** 图例是 100% 可靠的辅助入口：拾取失败/演示紧张时都能一键选城 */
+function selectFromLegend(city) {
   store.selectCity(city)
   ElMessage.success(`${city.welcome}　——${city.slogan}`)
 }
@@ -145,7 +158,7 @@ function buildOption(geojson, cities) {
         type: 'scatter3D',
         coordinateSystem: 'geo3D',
         data: tips,
-        symbolSize: 11,
+        symbolSize: 20,
         label: {
           show: true,
           position: 'top',
@@ -180,6 +193,8 @@ onMounted(async () => {
     chart.setOption(buildOption(geojson, store.cities))
     chart.on('click', onChartClick)
     window.addEventListener('resize', handleResize)
+    // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
+    if (import.meta.env.DEV) window.__mapChart = chart
   } catch (err) {
     console.error('3D 地图加载失败', err)
     ElMessage.error('地图数据加载失败，请确认 content/geojson 资源可用')
@@ -255,6 +270,18 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   font-size: 13px;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.stage-legend li:hover,
+.stage-legend li.active {
+  border-color: var(--city-color, rgba(125, 211, 252, 0.5));
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .stage-legend i {
