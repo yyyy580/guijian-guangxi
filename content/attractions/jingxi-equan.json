@@ -1,0 +1,11 @@
+{
+  "id": "jingxi-equan",
+  "name": "靖西鹅泉",
+  "cityId": "baise",
+  "coord": [106.36, 23.09],
+  "status": "placeholder",
+  "tags": ["喀斯特泉潭", "田园风光"],
+  "summary": "西南三大名泉之一，泉水清碧如玉，是中越界河归春河的源头，十五孔古桥横卧碧波之上。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

@@ -1,0 +1,272 @@
+<template>
+  <div class="map-stage">
+    <div ref="chartRef" class="map-canvas" aria-label="广西3D地图"></div>
+
+    <header class="stage-hud">
+      <h1 class="stage-title">桂见<span class="accent">广西</span></h1>
+      <p class="stage-sub">拖动旋转 · 滚轮缩放 · 点击四色光柱探索城市</p>
+      <ul class="stage-legend">
+        <li v-for="c in store.cities" :key="c.id">
+          <i :style="{ background: c.color }" />
+          <span>{{ c.name }}</span>
+          <em>{{ c.colorName }}</em>
+        </li>
+      </ul>
+    </header>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import * as echarts from 'echarts'
+import 'echarts-gl'
+import { ElMessage } from 'element-plus'
+import { useAppStore } from '@/stores/app'
+import flags from '@/config/feature.flags'
+
+const MAP_NAME = 'guangxi'
+const chartRef = ref(null)
+const store = useAppStore()
+let chart = null
+
+/** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
+function darken(hex, ratio = 0.55) {
+  const n = hex.replace('#', '')
+  const f = (i) => Math.round(parseInt(n.slice(i, i + 2), 16) * (1 - ratio))
+  return `rgb(${f(0)},${f(2)},${f(4)})`
+}
+
+/** 14 个地级市浮雕高度：四城略高并着城市色暗调，其余按固定伪随机起伏 */
+function buildRegions(geojson, cities) {
+  const cityMap = new Map(cities.map((c) => [c.fullName, c]))
+  return geojson.features.map((f, i) => {
+    const name = f.properties.name
+    const city = cityMap.get(name)
+    const region = {
+      name,
+      regionHeight: city ? 4.2 : 2 + ((i * 7) % 5) * 0.7,
+    }
+    if (city) region.itemStyle = { color: darken(city.color) }
+    return region
+  })
+}
+
+/** 四色光柱：竖直光束（双层辉光）+ 底部光晕 + 顶端可交互光点 */
+function buildPillarLayers(cities) {
+  const beams = []
+  const glows = []
+  const tips = []
+  for (const c of cities) {
+    const [lng, lat] = c.coord
+    const h = c.pillarHeight ?? 2.5
+    beams.push(
+      { coords: [[lng, lat, 0], [lng, lat, h]], lineStyle: { color: c.color, width: 5, opacity: 0.85 } },
+      { coords: [[lng, lat, 0], [lng, lat, h]], lineStyle: { color: '#ffffff', width: 1.2, opacity: 0.5 } }
+    )
+    glows.push({ name: c.name, value: [lng, lat, 0.05], itemStyle: { color: c.color, opacity: 0.22 } })
+    tips.push({
+      name: c.name,
+      value: [lng, lat, h],
+      itemStyle: { color: c.color },
+      cityId: c.id,
+      fullName: c.fullName,
+    })
+  }
+  return { beams, glows, tips }
+}
+
+function resolveCity(params) {
+  if (params.componentType === 'scatter3D' && params.data?.cityId) {
+    return store.cities.find((c) => c.id === params.data.cityId)
+  }
+  if (params.componentType === 'geo3D') {
+    return store.cities.find((c) => c.fullName === params.name)
+  }
+  return null
+}
+
+function onChartClick(params) {
+  const city = resolveCity(params)
+  if (!city) return
+  store.selectCity(city)
+  ElMessage.success(`${city.welcome}　——${city.slogan}`)
+}
+
+function buildOption(geojson, cities) {
+  const { beams, glows, tips } = buildPillarLayers(cities)
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      backgroundColor: 'rgba(7,19,31,0.92)',
+      borderColor: 'rgba(125,211,252,0.35)',
+      textStyle: { color: '#e8f1f8', fontSize: 13 },
+      formatter: (p) => {
+        const city = resolveCity(p)
+        return city
+          ? `<b style="font-size:14px">${city.fullName}</b><br/>${city.slogan}<br/><span style="opacity:.65">点击光柱探索 →</span>`
+          : ''
+      },
+    },
+    geo3D: {
+      map: MAP_NAME,
+      regionHeight: 3,
+      shading: 'realistic',
+      realisticMaterial: { roughness: 0.7, metalness: 0.1 },
+      postEffect: {
+        enable: true,
+        bloom: { enable: true, intensity: 0.15 },
+        depthOfField: { enable: false },
+      },
+      light: {
+        main: { intensity: 1.4, shadow: true, alpha: 42, beta: -32 },
+        ambient: { intensity: 0.5 },
+      },
+      boxWidth: 82,
+      groundPlane: { show: false },
+      itemStyle: { color: '#0d2c47', borderColor: 'rgba(125,211,252,0.45)', borderWidth: 1 },
+      regions: buildRegions(geojson, cities),
+      emphasis: { itemStyle: { color: '#155e8f' } },
+      selectedMode: false,
+      viewControl: {
+        alpha: 46,
+        beta: 8,
+        distance: 96,
+        minDistance: 40,
+        maxDistance: 200,
+        autoRotate: true,
+        autoRotateSpeed: 3,
+        autoRotateAfterStill: 4,
+      },
+    },
+    series: [
+      { type: 'lines3D', coordinateSystem: 'geo3D', data: beams, blendMode: 'lighter', silent: true },
+      { type: 'scatter3D', coordinateSystem: 'geo3D', data: glows, symbolSize: 20, silent: true },
+      {
+        type: 'scatter3D',
+        coordinateSystem: 'geo3D',
+        data: tips,
+        symbolSize: 11,
+        label: {
+          show: true,
+          position: 'top',
+          distance: 6,
+          formatter: (p) => p.name,
+          color: '#ffffff',
+          fontSize: 15,
+          fontWeight: 600,
+          textBorderColor: 'rgba(7,19,31,0.9)',
+          textBorderWidth: 2,
+        },
+        emphasis: {
+          label: { fontSize: 18 },
+          itemStyle: { color: '#ffffff' },
+        },
+      },
+    ],
+  }
+}
+
+onMounted(async () => {
+  if (!flags.map3D) return
+  try {
+    const [geojson, citiesJson] = await Promise.all([
+      fetch('/geojson/guangxi.json').then((r) => r.json()),
+      store.cities.length ? Promise.resolve({ cities: store.cities }) : fetch('/cities.json').then((r) => r.json()),
+    ])
+    store.setCities(citiesJson.cities)
+    echarts.registerMap(MAP_NAME, geojson)
+
+    chart = echarts.init(chartRef.value)
+    chart.setOption(buildOption(geojson, store.cities))
+    chart.on('click', onChartClick)
+    window.addEventListener('resize', handleResize)
+  } catch (err) {
+    console.error('3D 地图加载失败', err)
+    ElMessage.error('地图数据加载失败，请确认 content/geojson 资源可用')
+  }
+})
+
+function handleResize() {
+  chart?.resize()
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  chart?.dispose()
+  chart = null
+})
+</script>
+
+<style scoped>
+.map-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(ellipse at 50% 30%, #0c2136 0%, var(--bg-deep) 70%);
+}
+
+.map-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.map-canvas:active {
+  cursor: grabbing;
+}
+
+.stage-hud {
+  position: absolute;
+  top: 28px;
+  left: 36px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.stage-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 6px;
+}
+
+.stage-title .accent {
+  background: linear-gradient(120deg, var(--accent), #7dd3fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.stage-sub {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.stage-legend {
+  display: flex;
+  gap: 18px;
+  margin-top: 16px;
+  list-style: none;
+}
+
+.stage-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.stage-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.stage-legend em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+</style>

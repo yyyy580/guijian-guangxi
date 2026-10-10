@@ -1,0 +1,11 @@
+{
+  "id": "nanning-qingxiushan",
+  "name": "青秀山",
+  "cityId": "nanning",
+  "coord": [108.39, 22.79],
+  "status": "placeholder",
+  "tags": ["城市山岳", "绿城地标"],
+  "summary": "邕江之畔的'绿城翡翠'，龙象塔矗立山巅，千年苏铁园里藏着与恐龙同代的活化石。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "beihai-guantouling",
+  "name": "冠头岭",
+  "cityId": "beihai",
+  "coord": [109.05, 21.44],
+  "status": "placeholder",
+  "tags": ["森林公园", "观鸟胜地"],
+  "summary": "北海市区最高点，弓形的山岭探入北部湾，是候鸟迁徙的空中驿站，也是观日落的绝佳位置。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

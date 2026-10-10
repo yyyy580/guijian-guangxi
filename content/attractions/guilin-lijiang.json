@@ -1,0 +1,11 @@
+{
+  "id": "guilin-lijiang",
+  "name": "漓江",
+  "cityId": "guilin",
+  "coord": [110.29, 25.26],
+  "status": "placeholder",
+  "tags": ["喀斯特山水", "黄金水道"],
+  "summary": "桂林山水甲天下的精华所在，桂林至阳朔83公里水程，青峰夹岸、绿水萦洄，人民币20元背面的取景地。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

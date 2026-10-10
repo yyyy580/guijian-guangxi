@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "foods": [
+    { "id": "baise-mangguo", "cityId": "baise", "name": "百色芒果", "note": "中国芒果之乡，盛夏甜蜜", "status": "placeholder" },
+    { "id": "baise-baihaocha", "cityId": "baise", "name": "凌云白毫茶", "note": "云雾高山出好茶", "status": "placeholder" },
+    { "id": "nanning-laoyoufen", "cityId": "nanning", "name": "老友粉", "note": "酸辣鲜香，南宁人的乡愁", "status": "placeholder" },
+    { "id": "nanning-suanye", "cityId": "nanning", "name": "酸嘢", "note": "英雄难过酸嘢摊", "status": "placeholder" },
+    { "id": "beihai-haixian", "cityId": "beihai", "name": "北海海鲜", "note": "北部湾渔场直达餐桌", "status": "placeholder" },
+    { "id": "beihai-qiaogang-tangshui", "cityId": "beihai", "name": "侨港糖水", "note": "越南归侨带来的甜蜜手艺", "status": "placeholder" },
+    { "id": "guilin-mifen", "cityId": "guilin", "name": "桂林米粉", "note": "卤水是灵魂，先干拌后加汤", "status": "placeholder" },
+    { "id": "guilin-luohanguo", "cityId": "guilin", "name": "罗汉果", "note": "东方神果，清润回甘", "status": "placeholder" }
+  ]
+}

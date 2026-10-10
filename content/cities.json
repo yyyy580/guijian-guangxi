@@ -1,0 +1,59 @@
+{
+  "version": "0.1.0",
+  "province": "广西壮族自治区",
+  "adcode": 450000,
+  "cities": [
+    {
+      "id": "baise",
+      "name": "百色",
+      "fullName": "百色市",
+      "adcode": 451000,
+      "coord": [106.618, 23.902],
+      "color": "#e63946",
+      "colorName": "百色红",
+      "welcome": "百色欢迎您",
+      "slogan": "红色福地 · 千姿百色",
+      "pillarHeight": 2.8,
+      "attractions": ["baise-qiyi-jinianguan", "tongling-daxiagu", "jingxi-equan"]
+    },
+    {
+      "id": "nanning",
+      "name": "南宁",
+      "fullName": "南宁市",
+      "adcode": 450100,
+      "coord": [108.366, 22.817],
+      "color": "#4caf50",
+      "colorName": "南宁绿",
+      "welcome": "南宁欢迎您",
+      "slogan": "绿城四季青 · 老友暖人心",
+      "pillarHeight": 2.4,
+      "attractions": ["nanning-qingxiushan", "nanning-yuanboyuan"]
+    },
+    {
+      "id": "beihai",
+      "name": "北海",
+      "fullName": "北海市",
+      "adcode": 450500,
+      "coord": [109.12, 21.481],
+      "color": "#3a86ff",
+      "colorName": "北海蓝",
+      "welcome": "北海欢迎您",
+      "slogan": "天下第一滩 · 滨海慢生活",
+      "pillarHeight": 2.2,
+      "attractions": ["beihai-yintan", "beihai-guantouling"]
+    },
+    {
+      "id": "guilin",
+      "name": "桂林",
+      "fullName": "桂林市",
+      "adcode": 450300,
+      "coord": [110.29, 25.274],
+      "color": "#26c6da",
+      "colorName": "桂林青",
+      "welcome": "桂林欢迎您",
+      "slogan": "山水甲天下 · 漓江烟雨情",
+      "pillarHeight": 3.0,
+      "attractions": ["guilin-lijiang", "guilin-xiangbishan"]
+    }
+  ]
+}

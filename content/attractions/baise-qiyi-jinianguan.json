@@ -1,0 +1,16 @@
+{
+  "id": "baise-qiyi-jinianguan",
+  "name": "百色起义纪念馆",
+  "cityId": "baise",
+  "coord": [106.624, 23.903],
+  "status": "placeholder",
+  "tags": ["红色文化", "历史纪念馆"],
+  "summary": "全国爱国主义教育示范基地，记录1929年邓小平等老一辈革命家领导百色起义、创建右江革命根据地的历史。",
+  "narrative": {
+    "geo": "",
+    "legend": "",
+    "history": "",
+    "extended": ""
+  },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "beihai-yintan",
+  "name": "北海银滩",
+  "cityId": "beihai",
+  "coord": [109.13, 21.4],
+  "status": "placeholder",
+  "tags": ["滨海沙滩", "日落"],
+  "summary": "绵延约24公里的石英砂沙滩，'滩长平、沙细白、水温净、浪柔软、无鲨鱼'，被誉为天下第一滩。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

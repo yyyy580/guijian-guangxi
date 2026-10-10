@@ -1,0 +1,11 @@
+{
+  "id": "nanning-yuanboyuan",
+  "name": "南宁园博园",
+  "cityId": "nanning",
+  "coord": [108.48, 22.77],
+  "status": "placeholder",
+  "tags": ["园林博览", "生态修复"],
+  "summary": "第十二届中国国际园林博览会举办地，在采矿废弃地上再造山水园林，'生态修复'与'丝路园'是两大看点。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "guilin-xiangbishan",
+  "name": "象鼻山",
+  "cityId": "guilin",
+  "coord": [110.293, 25.262],
+  "status": "placeholder",
+  "tags": ["城市地标", "喀斯特奇观"],
+  "summary": "漓江与桃花江汇流处，山形酷似一头伸鼻豪饮江水的巨象，'象山水月'是桂林城的千年标志。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}

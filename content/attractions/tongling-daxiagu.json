@@ -1,0 +1,11 @@
+{
+  "id": "tongling-daxiagu",
+  "name": "通灵大峡谷",
+  "cityId": "baise",
+  "coord": [106.58, 23.28],
+  "status": "placeholder",
+  "tags": ["自然峡谷", "瀑布"],
+  "summary": "位于靖西市湖润镇，峡谷内藏着亚洲单级落差最高的瀑布之一，古生植物繁茂，被称为'地球上的一道美丽伤痕'。",
+  "narrative": { "geo": "", "legend": "", "history": "", "extended": "" },
+  "assets": { "cover": "", "gallery": [], "awakenVideo": "" }
+}
