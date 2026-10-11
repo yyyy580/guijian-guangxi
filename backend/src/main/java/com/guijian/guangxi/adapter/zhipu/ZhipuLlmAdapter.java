@@ -81,25 +81,27 @@ public class ZhipuLlmAdapter implements LlmAdapter {
                 throw new IOException("智谱接口返回 " + resp.statusCode() + "："
                         + truncate(resp.body().collect(Collectors.joining())));
             }
-            // 逐行读 SSE：data: {...} / data: [DONE]
-            resp.body().forEach(line -> {
-                if (!line.startsWith("data:")) {
-                    return;
-                }
-                String payload = line.substring(5).trim();
-                if (payload.isEmpty() || "[DONE]".equals(payload)) {
-                    return;
-                }
-                try {
-                    String delta = mapper.readTree(payload)
-                            .path("choices").path(0).path("delta").path("content").asText("");
-                    if (!delta.isEmpty()) {
-                        handler.onDelta(delta);
+            // 逐行读 SSE：data: {...} / data: [DONE]；try-with-resources 确保连接流关闭
+            try (Stream<String> lines = resp.body()) {
+                lines.forEach(line -> {
+                    if (!line.startsWith("data:")) {
+                        return;
                     }
-                } catch (Exception ignored) {
-                    // 坏帧丢弃，不中断流
-                }
-            });
+                    String payload = line.substring(5).trim();
+                    if (payload.isEmpty() || "[DONE]".equals(payload)) {
+                        return;
+                    }
+                    try {
+                        String delta = mapper.readTree(payload)
+                                .path("choices").path(0).path("delta").path("content").asText("");
+                        if (!delta.isEmpty()) {
+                            handler.onDelta(delta);
+                        }
+                    } catch (Exception ignored) {
+                        // 坏帧丢弃，不中断流
+                    }
+                });
+            }
             handler.onComplete();
         } catch (Exception e) {
             handler.onError(e);

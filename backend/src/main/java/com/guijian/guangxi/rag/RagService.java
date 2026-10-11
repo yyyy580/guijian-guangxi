@@ -47,6 +47,9 @@ public class RagService {
     private final Map<String, String> rawJsonById = new HashMap<>();
     /** 与 chunks 一一对应；null = 关键词模式 */
     private volatile float[][] vectors;
+    /** 上次索引构建失败时间戳；5 分钟内不重试，避免每次提问都打一遍 embedding API */
+    private static final long VECTOR_RETRY_INTERVAL_MS = 5 * 60 * 1000;
+    private volatile long vectorFailedAt;
 
     public RagService(LlmAdapter llm) {
         this.llm = llm;
@@ -145,6 +148,9 @@ public class RagService {
         if (!"zhipu".equalsIgnoreCase(provider) || vectors != null || chunks.isEmpty()) {
             return;
         }
+        if (vectorFailedAt > 0 && System.currentTimeMillis() - vectorFailedAt < VECTOR_RETRY_INTERVAL_MS) {
+            return; // 处于失败退避期，本次直接走关键词检索
+        }
         synchronized (this) {
             if (vectors != null) {
                 return;
@@ -158,10 +164,15 @@ public class RagService {
                 for (int i = 0; i < texts.size(); i += 16) {
                     embs.addAll(llm.embed(texts.subList(i, Math.min(texts.size(), i + 16))));
                 }
+                if (embs.size() != texts.size()) {
+                    throw new IllegalStateException("向量数量与知识块不匹配：期望 " + texts.size() + "，得到 " + embs.size());
+                }
                 vectors = embs.toArray(new float[0][]);
                 log.info("RAG 向量索引构建完成");
             } catch (Exception e) {
-                log.warn("向量索引构建失败，自动回退关键词检索：{}", e.getMessage());
+                vectorFailedAt = System.currentTimeMillis();
+                log.warn("向量索引构建失败，自动回退关键词检索（{} 分钟内不再重试）：{}",
+                        VECTOR_RETRY_INTERVAL_MS / 60000, e.getMessage());
             }
         }
     }
