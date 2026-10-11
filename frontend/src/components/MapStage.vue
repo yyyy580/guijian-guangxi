@@ -4,7 +4,7 @@
 
     <header class="stage-hud">
       <h1 class="stage-title">桂见<span class="accent">广西</span></h1>
-      <p class="stage-sub">拖动旋转 · 滚轮缩放 · 左键点击城市光柱探索城市</p>
+      <p class="stage-sub">拖动旋转 · 滚轮缩放 · 点击城市任意区域或光柱进入</p>
     </header>
   </div>
 </template>
@@ -70,15 +70,35 @@ function buildPillarLayers(cities) {
   return { beams, glows, tips }
 }
 
+/**
+ * 透明热区球阵：每城 3 个（中心+东西偏移）覆盖城市主要区域。
+ * geo3D 组件的区域点击在 echarts-gl 中不分发事件（见提交 c1ba084），
+ * 且 map3D 系列坐标系不对外、双 viewGL 相机无法同步，故用拾取球近似实现
+ * "点击城市任意区域即下钻"。球透明不影响视觉，事件路径与光柱一致。
+ */
+function buildHotzones(cities) {
+  const OFFSETS = [[0, 0], [-0.55, 0.22], [0.55, -0.18]]
+  const zones = []
+  for (const c of cities) {
+    const [lng, lat] = c.coord
+    for (const [dx, dy] of OFFSETS) {
+      zones.push({
+        name: c.name,
+        value: [lng + dx, lat + dy, 0.25],
+        itemStyle: { color: c.color, opacity: 0.01 },
+        cityId: c.id,
+      })
+    }
+  }
+  return zones
+}
+
 function resolveCity(params) {
   // echarts 事件参数规则：series（含 scatter3D）的 params.componentType 恒为 'series'，
-  // 真实类型在 params.seriesType。因此以 data.cityId 为可靠判据，geo3D 组件走 name 匹配。
+  // 真实类型在 params.seriesType。因此以 data.cityId 为可靠判据。
   const d = params.data
   if (d?.cityId) {
     return store.cities.find((c) => c.id === d.cityId)
-  }
-  if (params.componentType === 'geo3D') {
-    return store.cities.find((c) => c.fullName === params.name)
   }
   return null
 }
@@ -98,6 +118,7 @@ function onChartMouseOver(params) {
 
 function buildOption(geojson, cities) {
   const { beams, glows, tips } = buildPillarLayers(cities)
+  const hotzones = buildHotzones(cities)
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -107,7 +128,7 @@ function buildOption(geojson, cities) {
       formatter: (p) => {
         const city = resolveCity(p)
         return city
-          ? `<b style="font-size:14px">${city.fullName}</b><br/>${city.slogan}<br/><span style="opacity:.65">点击光柱探索 →</span>`
+          ? `<b style="font-size:14px">${city.fullName}</b><br/>${city.slogan}<br/><span style="opacity:.65">点击进入 →</span>`
           : ''
       },
     },
@@ -165,6 +186,13 @@ function buildOption(geojson, cities) {
           label: { fontSize: 18 },
           itemStyle: { color: '#ffffff' },
         },
+      },
+      {
+        // 透明热区球：贴地大半径，点击/悬停 = 进入该城市（覆盖光柱以外的区域）
+        type: 'scatter3D',
+        coordinateSystem: 'geo3D',
+        data: hotzones,
+        symbolSize: 48,
       },
     ],
   }
