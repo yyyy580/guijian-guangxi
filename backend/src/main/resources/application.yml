@@ -18,8 +18,12 @@ app:
     vision-model: ${LLM_VISION_MODEL:glm-4v-flash}   # 多模态识景（免费档）
     embedding-model: ${LLM_EMBEDDING_MODEL:embedding-3}  # RAG 向量
   tts:
-    provider: ${TTS_PROVIDER:stub}    # 讲解员朗读当前走前端 speechSynthesis，后端 TTS 预留
-    api-key: ${TTS_API_KEY:}
+    # 默认跟随 LLM_PROVIDER：配好智谱 Key 重启即得真 TTS，无需额外环境变量；可用 TTS_PROVIDER 单独覆盖
+    provider: ${TTS_PROVIDER:${LLM_PROVIDER:stub}}
+    base-url: ${TTS_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+    api-key: ${TTS_API_KEY:${LLM_API_KEY:}}   # 与大模型共用 Key，避免重复配置
+    model: ${TTS_MODEL:glm-tts}
+    voice: ${TTS_VOICE:tongtong}              # 彤彤（默认音色）
 
 logging:
   level:

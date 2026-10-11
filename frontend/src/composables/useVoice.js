@@ -19,16 +19,27 @@ export function speak(text) {
   }
 }
 
-/** 讲解员逐句投喂朗读：不 cancel，speechSynthesis 自动排队依次播 */
-export function speakSentence(text) {
-  if (!text || !('speechSynthesis' in window)) return
+/**
+ * 整段朗读（讲解员真 TTS 失败时的兜底）：先 cancel 再播，支持结束回调。
+ * 页面已有用户点击（粘性激活），通常可正常出声。
+ */
+export function speakFull(text, onend) {
+  if (!text || !('speechSynthesis' in window)) {
+    onend?.()
+    return
+  }
   try {
     const utter = new SpeechSynthesisUtterance(text)
     utter.lang = 'zh-CN'
     utter.rate = 1.05
+    if (onend) {
+      utter.onend = onend
+      utter.onerror = onend
+    }
+    speechSynthesis.cancel()
     speechSynthesis.speak(utter)
   } catch {
-    // 语音被浏览器自动播放策略拦截时静默失败，不影响字幕主流程
+    onend?.()
   }
 }
 

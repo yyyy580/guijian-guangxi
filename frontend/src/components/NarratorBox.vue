@@ -3,11 +3,11 @@
     <div class="n-head">
       <span class="n-avatar">桂桂</span>
       <span class="n-title">AI 讲解员</span>
-      <button class="n-btn" :class="{ stop: playing }" :disabled="loading" @click="toggle">
-        {{ loading ? '准备中…' : playing ? '停止讲解' : '开始讲解' }}
+      <button class="n-btn" :class="{ stop: playing || loading || synthesizing }" @click="toggle">
+        {{ loading ? '准备中…' : synthesizing ? '合成语音中…' : playing ? '停止讲解' : '开始讲解' }}
       </button>
     </div>
-    <p class="n-subtitle" :class="{ live: playing }">
+    <p class="n-subtitle" :class="{ live: loading || playing }">
       {{ subtitle || '点一下，桂桂把这里的景·史·情讲给你听' }}
     </p>
   </div>
@@ -17,18 +17,20 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { narrateStream } from '@/api/ai'
-import { speakSentence, stopSpeaking } from '@/composables/useVoice'
+import { speakFull, stopSpeaking } from '@/composables/useVoice'
 
 const store = useAppStore()
 const attractionId = computed(() => store.currentAttraction?.id)
 
 const subtitle = ref('')
-const playing = ref(false)
-const loading = ref(false)
+const playing = ref(false)      // 有声播放中（真 TTS 或本地兜底）
+const loading = ref(false)      // 讲解词流式生成中
+const synthesizing = ref(false) // 真 TTS 音频合成中
 let controller = null
+let audioEl = null
 
 function toggle() {
-  playing.value ? stop() : start()
+  playing.value || loading.value || synthesizing.value ? stop() : start()
 }
 
 function start() {
@@ -38,16 +40,10 @@ function start() {
   const ctrl = new AbortController()
   controller = ctrl
   loading.value = true
-  playing.value = true
-  let speakBuffer = '' // 待朗读缓冲（切句后消耗）；字幕用 subtitle 只增不减
+  // 讲解词流式上字幕；语音等全量文本就绪后交真 TTS，音色与节奏远胜本地合成
   narrateStream({ attractionId: attractionId.value }, (msg) => {
     if (msg.type === 'delta') {
       subtitle.value += msg.text
-      speakBuffer += msg.text
-      // 整句投喂朗读：字幕流式推进，语音按句排队
-      const cut = takeSentences(speakBuffer)
-      cut.sentences.forEach(speakSentence)
-      speakBuffer = cut.rest
     } else if (msg.type === 'error') {
       subtitle.value += msg.message || '讲解服务暂时不可用'
     }
@@ -56,32 +52,64 @@ function start() {
       if (err.name !== 'AbortError') subtitle.value = '讲解服务暂时不可用，请稍后再试'
     })
     .finally(() => {
-      if (speakBuffer.trim() && !ctrl.signal.aborted) speakSentence(speakBuffer.trim())
+      if (ctrl.signal.aborted) return
       loading.value = false
+      const text = subtitle.value.trim()
+      if (text) synthesizeAndPlay(text, ctrl.signal)
+    })
+}
+
+/** 真 TTS 优先：整段文本取回音频直接播放；任何失败自动回退本地 speechSynthesis，永不哑火 */
+async function synthesizeAndPlay(text, signal) {
+  synthesizing.value = true
+  let audio = null
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal,
+    })
+    if (!res.ok) throw new Error(`TTS(${res.status})`)
+    const blob = await res.blob()
+    if (signal.aborted) return
+    audio = new Audio(URL.createObjectURL(blob))
+    await audio.play() // 页面已有用户点击（粘性激活），可正常出声
+  } catch (err) {
+    if (err?.name === 'AbortError') return // 用户已停止，不再兜底出声
+    audio?.pause()
+    if (audio) URL.revokeObjectURL(audio.src)
+    audio = null
+    synthesizing.value = false
+    playing.value = true
+    speakFull(text, () => {
       playing.value = false
     })
+    return
+  }
+  audioEl = audio
+  audio.onended = () => {
+    playing.value = false
+    cleanupAudio()
+  }
+  synthesizing.value = false
+  playing.value = true
+}
+
+function cleanupAudio() {
+  audioEl?.pause()
+  if (audioEl) URL.revokeObjectURL(audioEl.src)
+  audioEl = null
 }
 
 function stop() {
   controller?.abort()
   controller = null
+  cleanupAudio()
   stopSpeaking()
   loading.value = false
+  synthesizing.value = false
   playing.value = false
-}
-
-/** 取出缓冲中所有完整句（以句末标点/换行切分），返回 {sentences, rest} */
-function takeSentences(text) {
-  const sentences = []
-  let rest = text
-  const re = /^([\s\S]*?[。！？!?…；;\n])/
-  let m
-  while ((m = rest.match(re))) {
-    const s = m[1].trim()
-    if (s) sentences.push(s)
-    rest = rest.slice(m[1].length)
-  }
-  return { sentences, rest }
 }
 
 onUnmounted(stop)

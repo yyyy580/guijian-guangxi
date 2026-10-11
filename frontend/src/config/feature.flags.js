@@ -15,5 +15,5 @@ export default {
   // --- P2 智能 ---
   awakenVideo: true,    // "唤醒风景"：静照切 AI 图生视频（九景素材已预生成，点击懒加载+失败回退）
   ragChat: true,        // RAG 知识问答（stub 演示模式可用，配 Key 后走真实大模型）
-  ttsNarrator: true,    // AI 讲解员：流式讲解词字幕 + speechSynthesis 朗读
+  ttsNarrator: true,    // AI 讲解员：流式字幕 + 真 TTS 语音（GLM-TTS，失败自动回退本地合成）
 }

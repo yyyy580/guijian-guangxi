@@ -1,12 +1,17 @@
 package com.guijian.guangxi.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.guijian.guangxi.adapter.ChatMessage;
 import com.guijian.guangxi.adapter.LlmAdapter;
+import com.guijian.guangxi.adapter.TtsAdapter;
 import com.guijian.guangxi.rag.KnowledgeChunk;
 import com.guijian.guangxi.rag.RagService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * - POST /api/chat    RAG 知识问答：检索知识块 → 依据资料流式回答（事件：sources/delta/done/error）
  * - POST /api/narrate AI 讲解员：依据景点全量资料生成口播讲解词（事件：delta/done/error）
  * - POST /api/vision  多模态识景：照片描述（非流式，演示模式返回明确提示）
+ * - POST /api/tts     语音合成：整段文本 → audio/wav（演示模式返回 503，前端回退本地语音）
  *
  * SSE 消息统一为 JSON：{type, text?/message?/items?}，前端按 type 分发。
  */
@@ -47,12 +53,19 @@ public class AiController {
     record VisionReq(String image, String hint) {
     }
 
+    record TtsReq(String text) {
+    }
+
     private final LlmAdapter llm;
     private final RagService rag;
+    private final TtsAdapter tts;
+    private final ObjectMapper mapper;
 
-    public AiController(LlmAdapter llm, RagService rag) {
+    public AiController(LlmAdapter llm, RagService rag, TtsAdapter tts, ObjectMapper mapper) {
         this.llm = llm;
         this.rag = rag;
+        this.tts = tts;
+        this.mapper = mapper;
     }
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -134,6 +147,45 @@ public class AiController {
         }
     }
 
+    /**
+     * 语音合成：{text} → audio/wav 二进制（GLM-TTS 彤彤音色）。
+     * 失败一律返回 JSON {error}，前端据此自动回退本地 speechSynthesis，讲解永不哑火。
+     */
+    @PostMapping("/tts")
+    public ResponseEntity<byte[]> tts(@RequestBody TtsReq req) {
+        String text = req.text() == null ? "" : req.text().trim();
+        if (text.isEmpty()) {
+            return jsonError(HttpStatus.BAD_REQUEST, "文本不能为空");
+        }
+        if (text.length() > 1000) {
+            // 智谱 input 上限 1024，留余量；前端超长时走本地语音兜底
+            return jsonError(HttpStatus.BAD_REQUEST, "文本过长，无法一次性合成语音");
+        }
+        try {
+            byte[] audio = tts.synthesize(text);
+            if (audio == null || audio.length == 0) {
+                return jsonError(HttpStatus.SERVICE_UNAVAILABLE, "TTS 未配置（演示模式），请回退本地语音");
+            }
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType("audio/wav"))
+                    .cacheControl(CacheControl.noStore())
+                    .body(audio);
+        } catch (Exception e) {
+            log.warn("TTS 合成失败", e);
+            return jsonError(HttpStatus.BAD_GATEWAY, friendly(e));
+        }
+    }
+
+    private ResponseEntity<byte[]> jsonError(HttpStatus status, String message) {
+        try {
+            return ResponseEntity.status(status)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(mapper.writeValueAsBytes(Map.of("error", message)));
+        } catch (Exception ignored) {
+            return ResponseEntity.status(status).build();
+        }
+    }
+
     // ---------- 流式公共骨架 ----------
 
     /**
@@ -195,6 +247,9 @@ public class AiController {
                 ? t.getClass().getSimpleName() : t.getMessage();
         if (msg.contains("未配置 LLM_API_KEY")) {
             return "AI 服务未配置：请先设置 LLM_API_KEY 环境变量并重启后端";
+        }
+        if (msg.contains("未配置 TTS API Key")) {
+            return "TTS 未配置：请设置 TTS_API_KEY 或 LLM_API_KEY 后重启后端";
         }
         if (msg.contains("401")) {
             return "智谱鉴权失败(401)：API Key 不正确，或账号未完成实名认证";
