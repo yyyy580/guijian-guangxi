@@ -13,6 +13,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 import 'echarts-gl'
+import gsap from 'gsap'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import flags from '@/config/feature.flags'
@@ -23,6 +24,10 @@ const chartRef = ref(null)
 const store = useAppStore()
 const emit = defineEmits(['drill'])
 let chart = null
+let introTl = null          // 开场"开卷"动画时间线
+let introRegions = []       // 动画期间的 regions 数组引用（applyIntro 就地改高度）
+let regionTargets = []      // 各市目标浮雕高度
+let pillarLayers = null     // 光柱三层数据（动画结束回填最终态）
 
 /** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
 function darken(hex, ratio = 0.55) {
@@ -71,23 +76,51 @@ function buildPillarLayers(cities) {
 }
 
 /**
- * 透明热区球阵：每城 3 个（中心+东西偏移）覆盖城市主要区域。
+ * 透明热区球阵：覆盖全省 14 市。四城各 3 球（中心+东西偏移）点击即下钻；
+ * 其余城市各 2 球（中心+小偏移），点击轻提示"敬请期待"——避免"点了没反应"。
  * geo3D 组件的区域点击在 echarts-gl 中不分发事件（见提交 c1ba084），
- * 且 map3D 系列坐标系不对外、双 viewGL 相机无法同步，故用拾取球近似实现
- * "点击城市任意区域即下钻"。球透明不影响视觉，事件路径与光柱一致。
+ * 故用拾取球近似实现区域交互。球透明不影响视觉，事件路径与光柱一致。
  */
-function buildHotzones(cities) {
-  const OFFSETS = [[0, 0], [-0.55, 0.22], [0.55, -0.18]]
+const CITY_ZONE_OFFSETS = [[0, 0], [-0.55, 0.22], [0.55, -0.18]]
+
+/** GeoJSON 要素近似质心（外环顶点均值，足够热区定位用） */
+function featureCenter(f) {
+  const ring = f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates[0][0]
+  let sx = 0
+  let sy = 0
+  for (const [x, y] of ring) {
+    sx += x
+    sy += y
+  }
+  return [sx / ring.length, sy / ring.length]
+}
+
+function buildHotzones(geojson, cities) {
+  const cityMap = new Map(cities.map((c) => [c.fullName, c]))
   const zones = []
-  for (const c of cities) {
-    const [lng, lat] = c.coord
-    for (const [dx, dy] of OFFSETS) {
-      zones.push({
-        name: c.name,
-        value: [lng + dx, lat + dy, 0.25],
-        itemStyle: { color: c.color, opacity: 0.01 },
-        cityId: c.id,
-      })
+  for (const f of geojson.features) {
+    const name = f.properties.name
+    const city = cityMap.get(name)
+    if (city) {
+      const [lng, lat] = city.coord
+      for (const [dx, dy] of CITY_ZONE_OFFSETS) {
+        zones.push({
+          name: city.name,
+          value: [lng + dx, lat + dy, 0.25],
+          itemStyle: { color: city.color, opacity: 0.01 },
+          cityId: city.id,
+        })
+      }
+    } else {
+      const [cx, cy] = featureCenter(f)
+      for (const [dx, dy] of [[0, 0], [0.35, 0.12]]) {
+        zones.push({
+          name,
+          value: [cx + dx, cy + dy, 0.25],
+          itemStyle: { color: '#143a5c', opacity: 0.01 },
+          pendingName: name,
+        })
+      }
     }
   }
   return zones
@@ -104,6 +137,11 @@ function resolveCity(params) {
 }
 
 function onChartClick(params) {
+  // 非四城区域：轻提示，避免"点了没反应"
+  if (params.data?.pendingName) {
+    ElMessage.info(`${params.data.pendingName}·更多城市，敬请期待`)
+    return
+  }
   const city = resolveCity(params)
   if (!city) return
   store.selectCity(city)
@@ -117,8 +155,11 @@ function onChartMouseOver(params) {
 }
 
 function buildOption(geojson, cities) {
-  const { beams, glows, tips } = buildPillarLayers(cities)
-  const hotzones = buildHotzones(cities)
+  pillarLayers = buildPillarLayers(cities)
+  const { beams, glows, tips } = pillarLayers
+  const hotzones = buildHotzones(geojson, cities)
+  introRegions = buildRegions(geojson, cities)
+  regionTargets = introRegions.map((r) => r.regionHeight)
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -126,6 +167,9 @@ function buildOption(geojson, cities) {
       borderColor: 'rgba(125,211,252,0.35)',
       textStyle: { color: '#e8f1f8', fontSize: 13 },
       formatter: (p) => {
+        if (p.data?.pendingName) {
+          return `<b style="font-size:14px">${p.data.pendingName}</b><br/><span style="opacity:.65">更多城市，敬请期待</span>`
+        }
         const city = resolveCity(p)
         return city
           ? `<b style="font-size:14px">${city.fullName}</b><br/>${city.slogan}<br/><span style="opacity:.65">点击进入 →</span>`
@@ -149,9 +193,10 @@ function buildOption(geojson, cities) {
       boxWidth: 82,
       groundPlane: { show: false },
       itemStyle: { color: '#0d2c47', borderColor: 'rgba(125,211,252,0.45)', borderWidth: 1 },
-      regions: buildRegions(geojson, cities),
+      regions: introRegions,
       emphasis: { itemStyle: { color: '#155e8f' } },
       selectedMode: false,
+      temporalSuperSampling: { enable: true },
       viewControl: {
         alpha: 46,
         beta: 8,
@@ -213,6 +258,7 @@ onMounted(async () => {
     chart.on('click', onChartClick)
     chart.on('mouseover', onChartMouseOver)
     window.addEventListener('resize', handleResize)
+    playIntro()
     // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
     if (import.meta.env.DEV) window.__mapChart = chart
   } catch (err) {
@@ -221,11 +267,91 @@ onMounted(async () => {
   }
 })
 
+/**
+ * 开场"开卷"动画：地图浮雕从平地隆起，四色光柱随后依次生长点亮。
+ * GSAP 驱动统一进度 t∈[0,1]，每帧一次合并 setOption（regions 高度 + 三层光柱）。
+ * 任何环节出错立即回填最终态，保证地图绝不残留在"平铺"状态。
+ */
+function playIntro() {
+  if (!chart) return
+  try {
+    applyIntro(0)
+    const proxy = { t: 0 }
+    introTl = gsap.timeline({ onComplete: finishIntro })
+    introTl.to(proxy, {
+      t: 1,
+      duration: 2.6,
+      ease: 'power1.inOut',
+      onUpdate: () => applyIntro(proxy.t),
+    })
+  } catch (err) {
+    console.warn('开场动画失败，直接呈现完整地图', err)
+    finishIntro()
+  }
+}
+
+function applyIntro(t) {
+  if (!chart) return
+  // 前 70% 进度：浮雕隆起；光柱从 45% 起按城市顺序错峰生长
+  const hScale = Math.min(t / 0.7, 1)
+  introRegions.forEach((r, i) => {
+    r.regionHeight = 0.1 + (regionTargets[i] - 0.1) * hScale
+  })
+  const beamsData = []
+  const glowsData = []
+  const tipsData = []
+  store.cities.forEach((c, i) => {
+    const p = Math.min(Math.max((t - 0.45 - i * 0.1) / 0.4, 0), 1)
+    const [lng, lat] = c.coord
+    const h = c.pillarHeight ?? 2.5
+    beamsData.push(
+      { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: c.color, width: 5, opacity: 0.85 * p } },
+      { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: '#ffffff', width: 1.2, opacity: 0.5 * p } },
+    )
+    glowsData.push({ name: c.name, value: [lng, lat, 0.05], itemStyle: { color: c.color, opacity: 0.22 * p } })
+    tipsData.push({
+      name: c.name,
+      value: [lng, lat, h * p],
+      itemStyle: { color: c.color, opacity: p },
+      label: { opacity: p },
+      cityId: c.id,
+      fullName: c.fullName,
+    })
+  })
+  chart.setOption({
+    geo3D: { regions: introRegions },
+    series: [
+      { data: beamsData },
+      { data: glowsData },
+      { data: tipsData },
+    ],
+  })
+}
+
+function finishIntro() {
+  introTl?.kill()
+  introTl = null
+  if (!chart || !pillarLayers) return
+  introRegions.forEach((r, i) => {
+    r.regionHeight = regionTargets[i]
+  })
+  chart.setOption({
+    geo3D: { regions: introRegions },
+    series: [
+      { data: pillarLayers.beams },
+      { data: pillarLayers.glows },
+      { data: pillarLayers.tips },
+    ],
+  })
+}
+
 function handleResize() {
   chart?.resize()
 }
 
 onBeforeUnmount(() => {
+  introTl?.kill()
+  introTl = null
   window.removeEventListener('resize', handleResize)
   chart?.dispose()
   chart = null
