@@ -1,7 +1,7 @@
 <template>
   <div class="attraction-view">
     <!-- 全屏背景墙：实拍图铺满整页固定不动，Ken Burns 缓放；无图时 CSS 艺术风景兜底 -->
-    <div class="bg-layer" :style="{ '--c': cityColor }" aria-hidden="true">
+    <div class="bg-layer" :class="{ immersed: awakened }" :style="{ '--c': cityColor }" aria-hidden="true">
       <img v-if="cover" class="bg-img" :src="cover" alt="" @error="coverError = true" />
       <div v-else class="bg-art"></div>
       <!-- 唤醒视频层：首帧与静照对齐，就绪后淡入实现"无缝唤醒"；懒加载（点击才挂载） -->
@@ -29,11 +29,14 @@
       <div class="bg-shade"></div>
     </div>
 
-    <button class="back-btn" @click="store.closeAttraction()">
+    <button class="back-btn" :class="{ dim: awakened }" @click="store.closeAttraction()">
       <span class="arrow">←</span> 返回{{ city.name }}
     </button>
 
-    <div class="content">
+    <!-- 沉浸模式控制：唤醒后唯一常驻按钮，点击回到静照 -->
+    <button v-if="awakened" class="unawaken-btn" @click="toggleAwaken">◻ 回到静照</button>
+
+    <div class="content" :class="{ immersed: awakened }">
       <header class="hero-meta">
         <span class="city-badge" :style="{ background: cityColor }">{{ city.name }} · {{ city.colorName }}</span>
         <h1>{{ attraction.name }}</h1>
@@ -212,6 +215,12 @@ function onVideoError() {
     rgba(4, 12, 22, 0.5) 42%,
     rgba(5, 13, 23, 0.94) 100%
   );
+  transition: opacity 0.6s ease;
+}
+
+/* 沉浸模式：压暗层大幅减淡，让视频原色透出 */
+.bg-layer.immersed .bg-shade {
+  opacity: 0.18;
 }
 
 /* 唤醒视频层：就绪后淡入，盖在静照上 */
@@ -260,7 +269,16 @@ function onVideoError() {
   background: rgba(56, 189, 248, 0.12);
 }
 
-/* ---------- 前景内容：标题压景深上部，正文入毛玻璃面板 ---------- */
+/* 沉浸模式下返回按钮半透明防干扰，hover 恢复醒目 */
+.back-btn.dim {
+  opacity: 0.25;
+}
+
+.back-btn.dim:hover {
+  opacity: 1;
+}
+
+/* ---------- 沉浸模式：唤醒后正文整体淡出，只剩纯视频 ---------- */
 .content {
   position: relative;
   z-index: 1;
@@ -270,6 +288,59 @@ function onVideoError() {
 .hero-meta {
   max-width: 920px;
   margin: 0 auto 28px;
+  transition: opacity 0.55s ease;
+}
+
+.content.immersed .hero-meta {
+  opacity: 0.3;
+}
+
+.panel {
+  max-width: 920px;
+  margin: 0 auto;
+  transition: opacity 0.55s ease, transform 0.55s ease;
+}
+
+.content.immersed .panel {
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+}
+
+/* 沉浸模式专属："回到静照"悬浮胶囊按钮 */
+.unawaken-btn {
+  position: fixed;
+  bottom: 42px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  padding: 11px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.55);
+  background: rgba(7, 19, 31, 0.55);
+  color: var(--text-main);
+  font-size: 14px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: border-color 0.25s ease, background 0.25s ease;
+  animation: fadeUp 0.6s ease;
+}
+
+.unawaken-btn:hover {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.18);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 .city-badge {
@@ -304,11 +375,7 @@ function onVideoError() {
   background: rgba(7, 19, 31, 0.35);
 }
 
-/* 无面板：文字直接映在背景墙上，仅保留栏宽与留白 */
-.panel {
-  max-width: 920px;
-  margin: 0 auto;
-}
+/* 无面板：文字直接映在背景墙上，仅保留栏宽与留白（栏宽/过渡定义见上方 .panel 主规则） */
 
 .summary {
   font-size: 15px;
