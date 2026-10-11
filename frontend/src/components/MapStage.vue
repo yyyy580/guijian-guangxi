@@ -37,15 +37,18 @@ function darken(hex, ratio = 0.55) {
   return `rgb(${f(0)},${f(2)},${f(4)})`
 }
 
-/** 14 个地级市浮雕高度：四城略高并着城市色暗调，其余按固定伪随机起伏 */
+/** 14 个地级市浮雕高度：四城明确高一层（5）并着城市色暗调，其余统一矮层（2.4），层级一目了然 */
+const CITY_REGION_HEIGHT = 5
+const PLAIN_REGION_HEIGHT = 2.4
+
 function buildRegions(geojson, cities) {
   const cityMap = new Map(cities.map((c) => [c.fullName, c]))
-  return geojson.features.map((f, i) => {
+  return geojson.features.map((f) => {
     const name = f.properties.name
     const city = cityMap.get(name)
     const region = {
       name,
-      regionHeight: city ? 4.2 : 2 + ((i * 7) % 5) * 0.7,
+      regionHeight: city ? CITY_REGION_HEIGHT : PLAIN_REGION_HEIGHT,
     }
     if (city) region.itemStyle = { color: darken(city.color) }
     return region
@@ -296,13 +299,13 @@ function playIntro() {
 
 function applyIntro(t) {
   if (!chart) return
-  // 前 65% 进度：地形整体隆起（全局基准 0.1→3）；镜头同步高空俯冲压低
+  // 前 65% 进度：地形整体隆起（全局基准 0.1→2.4 矮层）；镜头同步高空俯冲压低
   const hScale = Math.min(t / 0.65, 1)
   const camScale = Math.min(t / 0.6, 1)
-  const base = 0.1 + 2.9 * hScale
+  const base = 0.1 + (PLAIN_REGION_HEIGHT - 0.1) * hScale
   const alpha = 78 - 32 * camScale
   const distance = 140 - 44 * camScale
-  // 四城在后段（55%~90%）从基准继续长到各自目标高度
+  // 四城在后段（55%~90%）从矮层基准继续长到高层（5），层级差压轴亮相
   const cityScale = Math.min(Math.max((t - 0.55) / 0.35, 0), 1)
   const patch = []
   for (const c of store.cities) {
@@ -354,7 +357,7 @@ function finishIntro() {
   })
   chart.setOption({
     geo3D: {
-      regionHeight: 3,
+      regionHeight: PLAIN_REGION_HEIGHT,
       viewControl: { alpha: 46, distance: 96 },
       regions: introRegions.map((r) => ({ ...r })),
     },
