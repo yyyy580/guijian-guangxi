@@ -4,7 +4,8 @@
     <div class="bg-layer" :class="{ immersed: awakened }" :style="{ '--c': cityColor }" aria-hidden="true">
       <img v-if="cover" class="bg-img" :src="cover" alt="" @error="coverError = true" />
       <div v-else class="bg-art"></div>
-      <!-- 唤醒视频层：首帧与静照对齐，就绪后淡入实现"无缝唤醒"；懒加载（点击才挂载） -->
+      <!-- 唤醒视频层：首帧与静照对齐，就绪后淡入实现"无缝唤醒"；懒加载（点击才挂载）。
+           点击唤醒是有效用户手势，浏览器允许带声音自动播放；若被策略拦截自动降级静音 -->
       <video
         v-if="awakened && !videoError"
         class="bg-video"
@@ -12,7 +13,6 @@
         :src="awakenVideo"
         autoplay
         loop
-        muted
         playsinline
         @canplay="onVideoReady"
         @error="onVideoError"
@@ -131,8 +131,16 @@ function toggleAwaken() {
   awakened.value = true // 挂载 <video> 开始懒加载，就绪后淡入
 }
 
-function onVideoReady() {
+function onVideoReady(e) {
   videoReady.value = true
+  const v = e?.target
+  if (!v) return
+  // 尝试带声音播放；浏览器策略拦截时降级为静音播放，保证唤醒永不失败
+  v.volume = 1
+  v.play().catch(() => {
+    v.muted = true
+    v.play().catch(() => {})
+  })
 }
 
 function onVideoError() {
