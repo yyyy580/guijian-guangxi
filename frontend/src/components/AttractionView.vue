@@ -128,6 +128,7 @@ function toggleAwaken() {
     return
   }
   videoReady.value = false
+  videoError.value = false // 上次失败过也允许重新尝试
   awakened.value = true // 挂载 <video> 开始懒加载，就绪后淡入
 }
 
