@@ -36,6 +36,14 @@ function darken(hex, ratio = 0.55) {
   return `rgb(${f(0)},${f(2)},${f(4)})`
 }
 
+/** 区域色覆盖插值：t=0 与普通城市同为深蓝底色，t=1 覆盖为城市暗色（供逐城染色动画） */
+function mixCityColor(hex, t) {
+  const c = parseInt(hex.slice(1), 16)
+  const base = 0x0d2c47
+  const ch = (sh) => Math.round(((base >> sh) & 255) * (1 - t) + ((c >> sh) & 255) * 0.55 * t)
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`
+}
+
 /** 14 个地级市浮雕高度：四城明确高一层（5）并着城市色暗调，其余继承组件级基准矮层（2.4）。
  * 注意 echarts-gl 字段名：区域级高度是 height（regionHeight 是 geo3D 组件级基准），
  * 此前误用 regionHeight 导致区域高度从未生效（见用户截图反馈）。 */
@@ -319,7 +327,13 @@ function renderIntro(st) {
     const p = idx >= 0 ? st.h[idx] : 0
     const [lng, lat] = c.coord
     const h = c.pillarHeight ?? 2.5
-    patch.push({ name: c.fullName, height: st.base + (CITY_REGION_HEIGHT - st.base) * p })
+    // 拔起前与普通城市同为深蓝；高度长到七成后开始染色，到位时城市色刚好覆盖完成
+    const colorP = Math.min(Math.max((p - 0.7) / 0.3, 0), 1)
+    patch.push({
+      name: c.fullName,
+      height: st.base + (CITY_REGION_HEIGHT - st.base) * p,
+      itemStyle: { color: mixCityColor(c.color, colorP) },
+    })
     beamsData.push(
       { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: c.color, width: 5, opacity: 0.85 * p } },
       { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: '#ffffff', width: 1.2, opacity: 0.5 * p } },
