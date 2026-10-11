@@ -2,7 +2,15 @@
   <div class="attraction-view">
     <!-- 全屏背景墙：实拍图铺满整页固定不动，Ken Burns 缓放；无图时 CSS 艺术风景兜底 -->
     <div class="bg-layer" :class="{ immersed: awakened }" :style="{ '--c': cityColor }" aria-hidden="true">
-      <img v-if="cover" class="bg-img" :src="cover" alt="" @error="coverError = true" />
+      <img
+        v-if="cover"
+        class="bg-img"
+        :class="{ loaded: bgLoaded }"
+        :src="cover"
+        alt=""
+        @load="bgLoaded = true"
+        @error="coverError = true"
+      />
       <div v-else class="bg-art"></div>
       <!-- 唤醒视频层：首帧与静照对齐，就绪后淡入实现"无缝唤醒"；懒加载（点击才挂载）。
            点击唤醒是有效用户手势，浏览器允许带声音自动播放；若被策略拦截自动降级静音 -->
@@ -100,6 +108,7 @@ const tab = ref('geo')
 
 const coverError = ref(false)
 const cover = computed(() => (coverError.value ? '' : attraction.value?.assets?.cover || ''))
+const bgLoaded = ref(false) // 大图解码完成后淡入，避免半张图硬切
 
 // 唤醒风景状态机：idle → loading(视频挂载加载) → playing；可切回静照；出错回退
 const awakened = ref(false)
@@ -111,6 +120,7 @@ watch(
   () => attraction.value?.id,
   () => {
     coverError.value = false
+    bgLoaded.value = false
     awakened.value = false
     videoReady.value = false
     videoError.value = false
@@ -172,7 +182,13 @@ function onVideoError() {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.9s ease;
   animation: kenburns 26s ease-in-out infinite alternate;
+}
+
+.bg-img.loaded {
+  opacity: 1;
 }
 
 .bg-art {

@@ -12,11 +12,19 @@
 
     <!-- 全局知识问答浮窗（不随视图切换销毁，会话保留） -->
     <ChatPanel v-if="flags.ragChat" />
+
+    <!-- 首屏启动遮罩：四城九景数据就绪前盖住空白，避免地图闪断 -->
+    <Transition name="boot-fade">
+      <div v-if="booting" class="boot-overlay">
+        <div class="boot-ring"></div>
+        <p class="boot-text">桂见广西 · 正在唤醒四城九景</p>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import MapStage from '@/components/MapStage.vue'
 import CityMap from '@/components/CityMap.vue'
 import AttractionView from '@/components/AttractionView.vue'
@@ -26,6 +34,9 @@ import { useAppStore } from '@/stores/app'
 import { welcomeOnce } from '@/composables/useVoice'
 
 const store = useAppStore()
+
+/** 城市清单与九景详情任一未就绪即视为启动中 */
+const booting = computed(() => !store.cities.length || !Object.keys(store.attractions).length)
 
 if (import.meta.env.DEV) {
   // 调试入口：无头测试可直接操纵 store 验证视图流转（与 __cityChart 同款约定）
@@ -53,6 +64,61 @@ function onDrill(city) {
 .home {
   width: 100%;
   height: 100%;
+}
+
+/* ---------- 首屏启动遮罩 ---------- */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(20, 52, 84, 0.5) 0%, transparent 62%),
+    var(--bg-deep, #07131f);
+}
+
+.boot-ring {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 3px solid rgba(125, 211, 252, 0.18);
+  border-top-color: var(--accent, #38bdf8);
+  animation: boot-spin 0.9s linear infinite;
+}
+
+.boot-text {
+  font-size: 14px;
+  letter-spacing: 4px;
+  color: rgba(232, 241, 248, 0.72);
+  animation: boot-breathe 2s ease-in-out infinite;
+}
+
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes boot-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.boot-fade-leave-active {
+  transition: opacity 0.6s ease;
+}
+
+.boot-fade-leave-to {
+  opacity: 0;
 }
 
 /* 镜头感下钻转场：进入时由近推远 */

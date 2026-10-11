@@ -35,7 +35,9 @@
           </template>
 
           <div v-if="thinking" class="msg assistant">
-            <p class="thinking">桂桂思考中…</p>
+            <p class="thinking">
+              <span class="t-dots"><i></i><i></i><i></i></span>桂桂思考中…
+            </p>
           </div>
         </div>
 
@@ -104,18 +106,24 @@ function send() {
   ask(draft.value)
 }
 
-/** 流式生成回答：sources 事件挂参考来源，delta 逐字追加 */
+/** 流式生成回答：sources 事件挂参考来源，delta 逐字追加；首字到达前显示思考呼吸 */
 function reply() {
   const bubble = { role: 'assistant', text: '', sources: [] }
   messages.value.push(bubble)
   streaming.value = true
+  thinking.value = true
   controller = new AbortController()
   chatStream(
     { question: messages.value[messages.value.length - 2].text, attractionId: store.currentAttraction?.id },
     (msg) => {
       if (msg.type === 'sources') bubble.sources = msg.items
-      else if (msg.type === 'delta') bubble.text += msg.text
-      else if (msg.type === 'error') bubble.text += (bubble.text ? '\n' : '') + (msg.message || '服务异常')
+      else if (msg.type === 'delta') {
+        if (!bubble.text) thinking.value = false
+        bubble.text += msg.text
+      } else if (msg.type === 'error') {
+        thinking.value = false
+        bubble.text += (bubble.text ? '\n' : '') + (msg.message || '服务异常')
+      }
     },
     controller.signal,
   )
@@ -124,6 +132,7 @@ function reply() {
     })
     .finally(() => {
       streaming.value = false
+      thinking.value = false
       controller = null
     })
 }
@@ -330,13 +339,43 @@ function close() {
 }
 
 .thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-dim);
-  animation: blink 1.4s ease-in-out infinite;
 }
 
-@keyframes blink {
+/* 三点呼吸：错峰起伏，比生硬闪烁更柔和 */
+.t-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.t-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+.t-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.t-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
   50% {
-    opacity: 0.45;
+    opacity: 1;
+    transform: scale(1.15);
   }
 }
 
