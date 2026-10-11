@@ -25,8 +25,8 @@ const store = useAppStore()
 const emit = defineEmits(['drill'])
 let chart = null
 let introTl = null          // 开场"开卷"动画时间线
-let introRegions = []       // 初始 regions 数组引用（目标高度来源）
-let regionTargets = []      // 各市目标浮雕高度（finishIntro 恢复用）
+let introGeojson = null     // 地图 GeoJSON 引用（finishIntro 全量重建用）
+let introRegions = []       // 初始 regions（四城带 height 目标值）
 let cityHeights = new Map() // 四城 fullName → 目标高度（动画 patch 用）
 let pillarLayers = null     // 光柱三层数据（动画结束回填最终态）
 
@@ -37,7 +37,9 @@ function darken(hex, ratio = 0.55) {
   return `rgb(${f(0)},${f(2)},${f(4)})`
 }
 
-/** 14 个地级市浮雕高度：四城明确高一层（5）并着城市色暗调，其余统一矮层（2.4），层级一目了然 */
+/** 14 个地级市浮雕高度：四城明确高一层（5）并着城市色暗调，其余继承组件级基准矮层（2.4）。
+ * 注意 echarts-gl 字段名：区域级高度是 height（regionHeight 是 geo3D 组件级基准），
+ * 此前误用 regionHeight 导致区域高度从未生效（见用户截图反馈）。 */
 const CITY_REGION_HEIGHT = 5
 const PLAIN_REGION_HEIGHT = 2.4
 
@@ -46,11 +48,11 @@ function buildRegions(geojson, cities) {
   return geojson.features.map((f) => {
     const name = f.properties.name
     const city = cityMap.get(name)
-    const region = {
-      name,
-      regionHeight: city ? CITY_REGION_HEIGHT : PLAIN_REGION_HEIGHT,
+    const region = { name }
+    if (city) {
+      region.height = CITY_REGION_HEIGHT
+      region.itemStyle = { color: darken(city.color) }
     }
-    if (city) region.itemStyle = { color: darken(city.color) }
     return region
   })
 }
@@ -162,9 +164,9 @@ function buildOption(geojson, cities) {
   pillarLayers = buildPillarLayers(cities)
   const { beams, glows, tips } = pillarLayers
   const hotzones = buildHotzones(geojson, cities)
+  introGeojson = geojson
   introRegions = buildRegions(geojson, cities)
-  regionTargets = introRegions.map((r) => r.regionHeight)
-  cityHeights = new Map(introRegions.map((r) => [r.name, r.regionHeight]))
+  cityHeights = new Map(introRegions.filter((r) => r.height != null).map((r) => [r.name, r.height]))
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -183,7 +185,7 @@ function buildOption(geojson, cities) {
     },
     geo3D: {
       map: MAP_NAME,
-      regionHeight: 3,
+      regionHeight: PLAIN_REGION_HEIGHT,
       shading: 'realistic',
       realisticMaterial: { roughness: 0.7, metalness: 0.1 },
       postEffect: {
@@ -305,13 +307,14 @@ function applyIntro(t) {
   const base = 0.1 + (PLAIN_REGION_HEIGHT - 0.1) * hScale
   const alpha = 78 - 32 * camScale
   const distance = 140 - 44 * camScale
-  // 四城在后段（55%~90%）从矮层基准继续长到高层（5），层级差压轴亮相
+  // 四城在后段（55%~90%）从矮层基准继续长到高台（5），层级差压轴亮相。
+  // 区域级补间走 height 字段；若 GL 不响应区域级热更新，finishIntro 全量重建兜底
   const cityScale = Math.min(Math.max((t - 0.55) / 0.35, 0), 1)
   const patch = []
   for (const c of store.cities) {
     const target = cityHeights.get(c.fullName)
     if (target == null) continue
-    patch.push({ name: c.fullName, regionHeight: base + (target - base) * cityScale })
+    patch.push({ name: c.fullName, height: base + (target - base) * cityScale })
   }
   const beamsData = []
   const glowsData = []
@@ -351,22 +354,10 @@ function applyIntro(t) {
 function finishIntro() {
   introTl?.kill()
   introTl = null
-  if (!chart || !pillarLayers) return
-  introRegions.forEach((r, i) => {
-    r.regionHeight = regionTargets[i]
-  })
-  chart.setOption({
-    geo3D: {
-      regionHeight: PLAIN_REGION_HEIGHT,
-      viewControl: { alpha: 46, distance: 96 },
-      regions: introRegions.map((r) => ({ ...r })),
-    },
-    series: [
-      { data: pillarLayers.beams },
-      { data: pillarLayers.glows },
-      { data: pillarLayers.tips },
-    ],
-  })
+  if (!chart || !pillarLayers || !introGeojson) return
+  // 全量替换（notMerge）强制重建全部区域 mesh——四城高台一定呈现，
+  // 不赌 region 级热更新是否生效；事件绑定在 chart 实例上不受影响
+  chart.setOption(buildOption(introGeojson, store.cities), true)
 }
 
 function handleResize() {
