@@ -255,7 +255,10 @@ public class AiController {
             return "智谱鉴权失败(401)：API Key 不正确，或账号未完成实名认证";
         }
         if (msg.contains("429")) {
-            return "请求过于频繁(429)：请稍等几秒再试";
+            // 智谱 429 的原始 body 常含真实病因（并发超限/余额不足/模型未开通），必须透传才能定位
+            int idx = msg.indexOf('：');
+            String detail = idx >= 0 ? msg.substring(idx + 1) : "";
+            return "请求过于频繁(429)：" + (detail.isBlank() ? "请稍等几秒再试" : detail);
         }
         if (msg.contains("timed out") || msg.contains("超时") || msg.contains("Connection") || msg.contains("连接")) {
             return "网络连接智谱失败：请检查网络后重试";
