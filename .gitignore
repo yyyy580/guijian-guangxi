@@ -31,3 +31,7 @@ tmp/
 
 # 前端构建缓存
 frontend/.vite/
+
+# 用户本地误建文件
+backend/Key
+backend/backend-start.log
