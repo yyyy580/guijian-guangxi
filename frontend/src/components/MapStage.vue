@@ -25,8 +25,9 @@ const store = useAppStore()
 const emit = defineEmits(['drill'])
 let chart = null
 let introTl = null          // 开场"开卷"动画时间线
-let introRegions = []       // 动画期间的 regions 数组引用（applyIntro 就地改高度）
-let regionTargets = []      // 各市目标浮雕高度
+let introRegions = []       // 初始 regions 数组引用（目标高度来源）
+let regionTargets = []      // 各市目标浮雕高度（finishIntro 恢复用）
+let cityHeights = new Map() // 四城 fullName → 目标高度（动画 patch 用）
 let pillarLayers = null     // 光柱三层数据（动画结束回填最终态）
 
 /** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
@@ -160,6 +161,7 @@ function buildOption(geojson, cities) {
   const hotzones = buildHotzones(geojson, cities)
   introRegions = buildRegions(geojson, cities)
   regionTargets = introRegions.map((r) => r.regionHeight)
+  cityHeights = new Map(introRegions.map((r) => [r.name, r.regionHeight]))
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -268,8 +270,10 @@ onMounted(async () => {
 })
 
 /**
- * 开场"开卷"动画：地图浮雕从平地隆起，四色光柱随后依次生长点亮。
- * GSAP 驱动统一进度 t∈[0,1]，每帧一次合并 setOption（regions 高度 + 三层光柱）。
+ * 开场"开卷"动画：整个地形从平地隆起，镜头自高空俯冲压低，四色光柱随后依次生长。
+ * GSAP 驱动统一进度 t∈[0,1]，每帧一次合并 setOption。
+ * 关键：regions 必须传全新对象数组——echarts diff 对同引用数组会跳过更新
+ * （首版地形不动即此因）；全局 regionHeight 走组件级补间带动整块浮雕。
  * 任何环节出错立即回填最终态，保证地图绝不残留在"平铺"状态。
  */
 function playIntro() {
@@ -280,7 +284,7 @@ function playIntro() {
     introTl = gsap.timeline({ onComplete: finishIntro })
     introTl.to(proxy, {
       t: 1,
-      duration: 2.6,
+      duration: 4.2,
       ease: 'power1.inOut',
       onUpdate: () => applyIntro(proxy.t),
     })
@@ -292,16 +296,25 @@ function playIntro() {
 
 function applyIntro(t) {
   if (!chart) return
-  // 前 70% 进度：浮雕隆起；光柱从 45% 起按城市顺序错峰生长
-  const hScale = Math.min(t / 0.7, 1)
-  introRegions.forEach((r, i) => {
-    r.regionHeight = 0.1 + (regionTargets[i] - 0.1) * hScale
-  })
+  // 前 65% 进度：地形整体隆起（全局基准 0.1→3）；镜头同步高空俯冲压低
+  const hScale = Math.min(t / 0.65, 1)
+  const camScale = Math.min(t / 0.6, 1)
+  const base = 0.1 + 2.9 * hScale
+  const alpha = 78 - 32 * camScale
+  const distance = 140 - 44 * camScale
+  // 四城在后段（55%~90%）从基准继续长到各自目标高度
+  const cityScale = Math.min(Math.max((t - 0.55) / 0.35, 0), 1)
+  const patch = []
+  for (const c of store.cities) {
+    const target = cityHeights.get(c.fullName)
+    if (target == null) continue
+    patch.push({ name: c.fullName, regionHeight: base + (target - base) * cityScale })
+  }
   const beamsData = []
   const glowsData = []
   const tipsData = []
   store.cities.forEach((c, i) => {
-    const p = Math.min(Math.max((t - 0.45 - i * 0.1) / 0.4, 0), 1)
+    const p = Math.min(Math.max((t - 0.5 - i * 0.07) / 0.28, 0), 1)
     const [lng, lat] = c.coord
     const h = c.pillarHeight ?? 2.5
     beamsData.push(
@@ -319,7 +332,11 @@ function applyIntro(t) {
     })
   })
   chart.setOption({
-    geo3D: { regions: introRegions },
+    geo3D: {
+      regionHeight: base,
+      regions: patch,
+      viewControl: { alpha, distance },
+    },
     series: [
       { data: beamsData },
       { data: glowsData },
@@ -336,7 +353,11 @@ function finishIntro() {
     r.regionHeight = regionTargets[i]
   })
   chart.setOption({
-    geo3D: { regions: introRegions },
+    geo3D: {
+      regionHeight: 3,
+      viewControl: { alpha: 46, distance: 96 },
+      regions: introRegions.map((r) => ({ ...r })),
+    },
     series: [
       { data: pillarLayers.beams },
       { data: pillarLayers.glows },
