@@ -27,7 +27,6 @@ let chart = null
 let introTl = null          // 开场"开卷"动画时间线
 let introGeojson = null     // 地图 GeoJSON 引用（finishIntro 全量重建用）
 let introRegions = []       // 初始 regions（四城带 height 目标值）
-let cityHeights = new Map() // 四城 fullName → 目标高度（动画 patch 用）
 let pillarLayers = null     // 光柱三层数据（动画结束回填最终态）
 
 /** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
@@ -166,7 +165,6 @@ function buildOption(geojson, cities) {
   const hotzones = buildHotzones(geojson, cities)
   introGeojson = geojson
   introRegions = buildRegions(geojson, cities)
-  cityHeights = new Map(introRegions.filter((r) => r.height != null).map((r) => [r.name, r.height]))
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -275,23 +273,32 @@ onMounted(async () => {
 })
 
 /**
- * 开场"开卷"动画：整个地形从平地隆起，镜头自高空俯冲压低，四色光柱随后依次生长。
- * GSAP 驱动统一进度 t∈[0,1]，每帧一次合并 setOption。
- * 关键：regions 必须传全新对象数组——echarts diff 对同引用数组会跳过更新
- * （首版地形不动即此因）；全局 regionHeight 走组件级补间带动整块浮雕。
- * 任何环节出错立即回填最终态，保证地图绝不残留在"平铺"状态。
+ * 开场"开卷"动画：
+ * 第一步（0~2.7s）整个地形从平地隆起到矮层，镜头同步自高空俯冲压低；
+ * 第二步四城按指定顺序逐个拔起到高台：百色→桂林→南宁→北海，开始时刻间隔 2 秒，
+ * 每城生长 0.9s，光柱随本城拔起同步生长点亮。
+ * 每帧一次合并 setOption；regions 传全新对象数组（echarts 对同引用数组跳过 diff）。
+ * 任何环节出错立即 finishIntro 全量重建，保证地图绝不残留在"平铺"状态。
  */
+const INTRO_CITY_ORDER = ['baise', 'guilin', 'nanning', 'beihai']
+
 function playIntro() {
   if (!chart) return
   try {
-    applyIntro(0)
-    const proxy = { t: 0 }
+    const st = { base: 0.1, cam: 0, h: [0, 0, 0, 0] }
+    const render = () => renderIntro(st)
+    render()
     introTl = gsap.timeline({ onComplete: finishIntro })
-    introTl.to(proxy, {
-      t: 1,
-      duration: 4.2,
-      ease: 'power1.inOut',
-      onUpdate: () => applyIntro(proxy.t),
+    // 全体隆起 + 镜头俯冲
+    introTl.to(st, { base: PLAIN_REGION_HEIGHT, duration: 2.7, ease: 'power1.inOut', onUpdate: render }, 0)
+    introTl.to(st, { cam: 1, duration: 2.4, ease: 'power1.out', onUpdate: render }, 0)
+    // 四城逐个拔起（开始时刻间隔 2 秒，生长 0.9s），光柱随本城同步生长
+    INTRO_CITY_ORDER.forEach((id, i) => {
+      introTl.to(
+        st.h,
+        { [i]: 1, duration: 0.9, ease: 'power2.out', onUpdate: render },
+        2.7 + i * 2,
+      )
     })
   } catch (err) {
     console.warn('开场动画失败，直接呈现完整地图', err)
@@ -299,30 +306,20 @@ function playIntro() {
   }
 }
 
-function applyIntro(t) {
+function renderIntro(st) {
   if (!chart) return
-  // 前 65% 进度：地形整体隆起（全局基准 0.1→2.4 矮层）；镜头同步高空俯冲压低
-  const hScale = Math.min(t / 0.65, 1)
-  const camScale = Math.min(t / 0.6, 1)
-  const base = 0.1 + (PLAIN_REGION_HEIGHT - 0.1) * hScale
-  const alpha = 78 - 32 * camScale
-  const distance = 140 - 44 * camScale
-  // 四城在后段（55%~90%）从矮层基准继续长到高台（5），层级差压轴亮相。
-  // 区域级补间走 height 字段；若 GL 不响应区域级热更新，finishIntro 全量重建兜底
-  const cityScale = Math.min(Math.max((t - 0.55) / 0.35, 0), 1)
+  const alpha = 78 - 32 * st.cam
+  const distance = 140 - 44 * st.cam
   const patch = []
-  for (const c of store.cities) {
-    const target = cityHeights.get(c.fullName)
-    if (target == null) continue
-    patch.push({ name: c.fullName, height: base + (target - base) * cityScale })
-  }
   const beamsData = []
   const glowsData = []
   const tipsData = []
-  store.cities.forEach((c, i) => {
-    const p = Math.min(Math.max((t - 0.5 - i * 0.07) / 0.28, 0), 1)
+  store.cities.forEach((c) => {
+    const idx = INTRO_CITY_ORDER.indexOf(c.id)
+    const p = idx >= 0 ? st.h[idx] : 0
     const [lng, lat] = c.coord
     const h = c.pillarHeight ?? 2.5
+    patch.push({ name: c.fullName, height: st.base + (CITY_REGION_HEIGHT - st.base) * p })
     beamsData.push(
       { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: c.color, width: 5, opacity: 0.85 * p } },
       { coords: [[lng, lat, 0], [lng, lat, h * p]], lineStyle: { color: '#ffffff', width: 1.2, opacity: 0.5 * p } },
@@ -339,7 +336,7 @@ function applyIntro(t) {
   })
   chart.setOption({
     geo3D: {
-      regionHeight: base,
+      regionHeight: st.base,
       regions: patch,
       viewControl: { alpha, distance },
     },
