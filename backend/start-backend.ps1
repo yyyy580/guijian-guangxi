@@ -17,4 +17,10 @@ if ($env:LLM_API_KEY) {
     Write-Host "==> 未配置 Key，进入 stub 演示模式" -ForegroundColor Yellow
 }
 
-mvn spring-boot:run
+Write-Host "==> Java: $(java -version 2>&1 | Select-Object -First 1)"
+Write-Host "==> 启动后端（输出同步记录到 backend\backend-start.log）..."
+
+# 输出同步写入日志文件：万一启动失败，直接看日志定位，无需截图
+mvn spring-boot:run 2>&1 | Tee-Object -FilePath "$PSScriptRoot\backend-start.log"
+
+Write-Host "==> 后端已退出。如启动失败，把日志最后一屏发给老师即可：backend\backend-start.log" -ForegroundColor Yellow
