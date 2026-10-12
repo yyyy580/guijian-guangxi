@@ -14,6 +14,11 @@
 // 注意不能用 <script setup> 里的 let——setup 函数体每个组件实例都会重新执行，
 // 组件随下钻/返回反复销毁重建时标志会被重置，动画就会重播
 let introPlayed = false
+// 应用层自转共享状态：echarts-gl 内置 autoRotate 的内部循环会被开卷动画期间
+// 的每帧 setOption 搅死后不再恢复，故改由 GSAP 无限 tween 驱动 beta，跨实例常驻
+const rotateState = { beta: 8 }
+let rotateTl = null
+let stillTimer = null
 </script>
 
 <script setup>
@@ -223,9 +228,7 @@ function buildOption(geojson, cities) {
         distance: 96,
         minDistance: 40,
         maxDistance: 200,
-        autoRotate: true,
-        autoRotateSpeed: 3,
-        autoRotateAfterStill: 4,
+        autoRotate: false, // 内置自转已弃用（会被动画 setOption 搅死），改由 ensureRotate 的 GSAP tween 驱动
       },
     },
     series: [
@@ -284,6 +287,7 @@ onMounted(async () => {
       introPlayed = true
       playIntro()
     }
+    startAutoRotateWithInteraction()
     // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
     if (import.meta.env.DEV) window.__mapChart = chart
   } catch (err) {
@@ -301,6 +305,49 @@ onMounted(async () => {
  * 任何环节出错立即 finishIntro 全量重建，保证地图绝不残留在"平铺"状态。
  */
 const INTRO_CITY_ORDER = ['baise', 'guilin', 'nanning', 'beihai']
+
+/**
+ * 应用层自转：GSAP 无限 tween 匀速推进 beta（120s 一圈，同原 autoRotateSpeed 3）。
+ * 只写 viewControl.beta，与开卷动画控制的 alpha/distance 字段互不覆盖，可并行。
+ * tween 模块级常驻，组件销毁重建（chart 置空时 onUpdate 空转）后 resume 即无缝续转。
+ */
+function ensureRotate() {
+  if (!chart) return
+  if (rotateTl) {
+    rotateTl.resume()
+    return
+  }
+  rotateTl = gsap.to(rotateState, {
+    beta: '+=360',
+    duration: 120,
+    ease: 'none',
+    repeat: -1,
+    onUpdate: () => {
+      if (chart) chart.setOption({ geo3D: { viewControl: { beta: rotateState.beta } } })
+    },
+  })
+}
+
+/** 用户开始拖拽/缩放：暂停自转并清掉恢复计时 */
+function pauseRotate() {
+  rotateTl?.pause()
+  clearTimeout(stillTimer)
+}
+
+/** 用户松手后静止 4 秒，恢复自转 */
+function resumeRotateLater() {
+  clearTimeout(stillTimer)
+  stillTimer = setTimeout(() => rotateTl?.resume(), 4000)
+}
+
+/** 挂接交互与自转：zrender 监听随 chart.dispose 自动释放 */
+function startAutoRotateWithInteraction() {
+  ensureRotate()
+  const zr = chart.getZr()
+  zr.on('mousedown', pauseRotate)
+  zr.on('mousewheel', pauseRotate)
+  zr.on('mouseup', resumeRotateLater)
+}
 
 function playIntro() {
   if (!chart) return
@@ -390,6 +437,7 @@ function handleResize() {
 onBeforeUnmount(() => {
   introTl?.kill()
   introTl = null
+  clearTimeout(stillTimer)
   window.removeEventListener('resize', handleResize)
   chart?.dispose()
   chart = null
