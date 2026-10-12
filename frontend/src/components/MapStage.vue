@@ -1,11 +1,43 @@
 <template>
   <div class="map-stage">
+    <!-- 夜空氛围层：四色光雾 + 星尘 + 底部悬浮辉光（纯装饰，垫在地图底下，不拦截交互） -->
+    <div class="nebula" aria-hidden="true"></div>
+    <div class="starfield" aria-hidden="true">
+      <span v-for="(s, i) in stars" :key="i" class="star" :style="s"></span>
+      <span class="meteor"></span>
+    </div>
+    <div class="map-glow" aria-hidden="true"></div>
+
     <div ref="chartRef" class="map-canvas" aria-label="广西3D地图"></div>
 
     <header class="stage-hud">
       <h1 class="stage-title">桂见<span class="accent">广西</span></h1>
       <p class="stage-sub">拖动旋转 · 滚轮缩放 · 点击城市任意区域或光柱进入</p>
     </header>
+
+    <!-- 左下四城图例条：点击直接下钻（与地图点击同路）；hover 展开城市口号 -->
+    <nav class="legend-bar" aria-label="四城快速入口">
+      <button
+        v-for="c in store.cities"
+        :key="c.id"
+        class="legend-item"
+        type="button"
+        @click="drillTo(c)"
+      >
+        <span class="legend-dot" :style="{ background: c.color, boxShadow: `0 0 8px ${c.color}` }"></span>
+        <span class="legend-name">{{ c.name }}</span>
+        <span class="legend-slogan">{{ c.slogan }}</span>
+      </button>
+    </nav>
+
+    <!-- 右上数据徽标：一眼看到作品结构（右下被问答浮窗占据，放右上与标题对角平衡） -->
+    <aside class="stat-badge" aria-hidden="true">
+      <span><b>4</b> 城市</span>
+      <i></i>
+      <span><b>9</b> 景区</span>
+      <i></i>
+      <span><b>4</b> 层 AI 能力</span>
+    </aside>
   </div>
 </template>
 
@@ -46,6 +78,23 @@ let introTl = null          // 开场"开卷"动画时间线
 let introGeojson = null     // 地图 GeoJSON 引用（finishIntro 全量重建用）
 let introRegions = []       // 初始 regions（四城带 height 目标值）
 let pillarLayers = null     // 光柱三层数据（动画结束回填最终态）
+
+/** 图例条下钻：与地图点击同一条路（selectCity + drill 事件由 HomeView 触发欢迎语） */
+function drillTo(city) {
+  if (!flags.cityDrilldown) return
+  store.selectCity(city)
+  emit('drill', city)
+}
+
+/** 星尘背景：实例化时随机撒一次（位置/大小/闪烁节奏），纯装饰不参与交互 */
+const stars = Array.from({ length: 72 }, () => ({
+  left: `${(Math.random() * 100).toFixed(2)}%`,
+  top: `${(Math.random() * 100).toFixed(2)}%`,
+  width: `${(Math.random() * 1.4 + 0.6).toFixed(2)}px`,
+  height: `${(Math.random() * 1.4 + 0.6).toFixed(2)}px`,
+  animationDelay: `${(Math.random() * 6).toFixed(2)}s`,
+  animationDuration: `${(Math.random() * 3 + 3).toFixed(2)}s`,
+}))
 
 /** 城市色压暗作为地图区域着色（保持数据驱动，不硬编码区域颜色） */
 function darken(hex, ratio = 0.55) {
@@ -513,6 +562,193 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   background: radial-gradient(ellipse at 50% 30%, #0c2136 0%, var(--bg-deep) 70%);
+  overflow: hidden; /* 光雾/流星出界不产生滚动 */
+}
+
+/* ---------- 夜空氛围层 ---------- */
+/* 四色光雾：取自四城主题色（桂林青/北海蓝/百色红/南宁绿），把四角死黑变成深邃夜空 */
+.nebula {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 55% at 8% 10%, rgba(38, 198, 218, 0.1) 0%, transparent 70%),
+    radial-gradient(40% 50% at 92% 6%, rgba(58, 134, 255, 0.1) 0%, transparent 70%),
+    radial-gradient(45% 55% at 5% 90%, rgba(230, 57, 70, 0.09) 0%, transparent 70%),
+    radial-gradient(42% 52% at 95% 92%, rgba(76, 175, 80, 0.09) 0%, transparent 70%);
+  animation: nebula-breathe 18s ease-in-out infinite;
+}
+
+@keyframes nebula-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.starfield {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #e8f1f8;
+  animation: star-twinkle 4s ease-in-out infinite;
+}
+
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* 流星：长周期循环，只在前 7% 时间划过，其余时间隐身 */
+.meteor {
+  position: absolute;
+  top: 14%;
+  left: 72%;
+  width: 130px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(232, 241, 248, 0.95), transparent);
+  opacity: 0;
+  transform: rotate(26deg);
+  animation: meteor-fall 11s ease-in 5s infinite;
+}
+
+@keyframes meteor-fall {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(26deg);
+  }
+  2% {
+    opacity: 0.9;
+  }
+  7% {
+    opacity: 0;
+    transform: translate(-300px, 146px) rotate(26deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-300px, 146px) rotate(26deg);
+  }
+}
+
+/* 底部悬浮辉光：让 3D 地图像浮在发光海面上 */
+.map-glow {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  width: 74%;
+  height: 28%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(56, 189, 248, 0.16) 0%,
+    rgba(56, 189, 248, 0.05) 45%,
+    transparent 72%
+  );
+}
+
+/* ---------- 左下四城图例条 ---------- */
+.legend-bar {
+  position: absolute;
+  left: 36px;
+  bottom: 30px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background: rgba(7, 19, 31, 0.55);
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.legend-item:hover {
+  border-color: rgba(125, 211, 252, 0.5);
+  background: rgba(12, 33, 54, 0.82);
+  transform: translateY(-2px);
+}
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  color: #e8f1f8;
+  letter-spacing: 2px;
+}
+
+/* 口号默认收起，hover 展开形成小惊喜 */
+.legend-slogan {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: all 0.3s ease;
+}
+
+.legend-item:hover .legend-slogan {
+  max-width: 200px;
+  opacity: 1;
+}
+
+/* ---------- 右上数据徽标 ---------- */
+.stat-badge {
+  position: absolute;
+  top: 34px;
+  right: 36px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  color: rgba(232, 241, 248, 0.55);
+  pointer-events: none;
+  user-select: none;
+}
+
+.stat-badge b {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 15px;
+  margin-right: 2px;
+}
+
+.stat-badge i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(125, 211, 252, 0.45);
 }
 
 .map-canvas {
