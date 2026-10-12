@@ -90,6 +90,10 @@ function buildOption(geojson) {
         distance: 105,
         minDistance: 50,
         maxDistance: 180,
+        // echarts-gl geo3D 的 viewControl 默认 minBeta/-maxBeta = ±80，相机写入会被
+        // setBeta 永久钳平（省图自转"转一半停住"的根因）。显式解除，长时自转不撞墙
+        minBeta: -Infinity,
+        maxBeta: Infinity,
         autoRotate: true,
         autoRotateSpeed: 2,
         autoRotateAfterStill: 4,

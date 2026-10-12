@@ -19,6 +19,12 @@ let introPlayed = false
 const rotateState = { beta: 8 }
 let rotateTl = null
 let stillTimer = null
+// 活实例的 OrbitControl 引用：自转的唯一写入点（相机直驱）+ 清残余拖拽速度用。
+// notMerge 重建会换新 control，每次 finishIntro 后必须重新捕获
+let rotateCtl = null
+// 活实例 chart 的模块级引用：组件下钻/返回销毁重建后旧实例 chart 置 null，
+// 闭包若捕获死引用就会写给已 dispose 的实例。所有跨实例写入必须走这两个模块级变量
+let liveChart = null
 </script>
 
 <script setup>
@@ -224,10 +230,20 @@ function buildOption(geojson, cities) {
       temporalSuperSampling: { enable: true },
       viewControl: {
         alpha: 46,
-        beta: 8,
+        beta: rotateState.beta,
         distance: 96,
         minDistance: 40,
         maxDistance: 200,
+        // 关键①：echarts-gl 给 geo3D 的 viewControl 默认 minBeta/-maxBeta = ±80，
+        // OrbitControl.setBeta 会把超限写入永久钳平——自转 3°/s 约 24s 撞墙后
+        // "连转都不转"（模型经 echo 回写也被钉在 80，与 16db795 的"转一半停住"同根）。
+        // 显式解除限位，自转/拖拽才能全向连续
+        minBeta: -Infinity,
+        maxBeta: Infinity,
+        // 关键②：echarts-gl 每次渲染都会 setFromViewControlModel；animation 开着（全局默认
+        // true + 300ms）时相机不直接落位而是 animateTo——每秒堆 60 个相机补间动画器互相
+        // 覆盖且 _isAnimating 恒真挡掉拖拽。关掉后模型值直接落位，GSAP 驱动才真正生效
+        animation: false,
         autoRotate: false, // 内置自转已弃用（会被动画 setOption 搅死），改由 ensureRotate 的 GSAP tween 驱动
       },
     },
@@ -277,6 +293,7 @@ onMounted(async () => {
     echarts.registerMap(MAP_NAME, geojson)
 
     chart = echarts.init(chartRef.value)
+    liveChart = chart
     chart.setOption(buildOption(geojson, store.cities))
     chart.on('click', onChartClick)
     chart.on('mouseover', onChartMouseOver)
@@ -289,7 +306,11 @@ onMounted(async () => {
     }
     startAutoRotateWithInteraction()
     // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
-    if (import.meta.env.DEV) window.__mapChart = chart
+    if (import.meta.env.DEV) {
+      window.__mapChart = chart
+      // 自转诊断：state=tween 活值 / chart()=活实例 / isPaused()=tween 暂停态
+      window.__rotDiag = { state: rotateState, chart: () => chart, isPaused: () => !!rotateTl?.paused() }
+    }
   } catch (err) {
     console.error('3D 地图加载失败', err)
     ElMessage.error('地图数据加载失败，请确认 content/geojson 资源可用')
@@ -307,13 +328,15 @@ onMounted(async () => {
 const INTRO_CITY_ORDER = ['baise', 'guilin', 'nanning', 'beihai']
 
 /**
- * 应用层自转：GSAP 无限 tween 匀速推进 beta（120s 一圈，同原 autoRotateSpeed 3）。
- * 只写 viewControl.beta，与开卷动画控制的 alpha/distance 字段互不覆盖，可并行。
- * tween 模块级常驻，组件销毁重建（chart 置空时 onUpdate 空转）后 resume 即无缝续转。
+ * 应用层自转：GSAP 无限 tween 匀速推进 beta（120s 一圈，同原 autoRotateSpeed 3），
+ * onUpdate 相机直驱（见 onUpdate 注释）。与开卷动画控制的 alpha/distance 字段互不覆盖，可并行。
+ * repeatRefresh 让每圈从当前值重新解析 '+=360'，避免 repeat 回跳。
+ * tween 模块级常驻，组件销毁重建（rotateCtl 置空时 onUpdate 空转）后 resume 即无缝续转。
  */
 function ensureRotate() {
   if (!chart) return
   if (rotateTl) {
+    syncRotateFromCamera()
     rotateTl.resume()
     return
   }
@@ -322,10 +345,30 @@ function ensureRotate() {
     duration: 120,
     ease: 'none',
     repeat: -1,
+    repeatRefresh: true,
     onUpdate: () => {
-      if (chart) chart.setOption({ geo3D: { viewControl: { beta: rotateState.beta } } })
+      if (!rotateCtl) return
+      // 自转激活期间拖拽必然处于暂停态（tween 已 pause），此刻控制里任何残余
+      // 拖拽速度都是非法状态（幻影事件/松手残量）。不清零的话其内部循环每帧
+      // 会把速度再积分回 beta，和直驱写入互相打架
+      rotateCtl._rotateVelocity?.set?.(0, 0)
+      // 相机直驱：setBeta 只落 _phi + _needsUpdate，zr 帧循环里 control._update
+      // 负责 _updateTransform 摆相机并 trigger('update')，由 echarts 把相机值回写模型。
+      // 不走 setOption→模型→render 管线——实测该管线会被静默卡死（连手动 setOption
+      // 的合并都被吞、内部标志全健康），一旦卡死模型与相机永久冻结在 80。直驱后
+      // option 管线的死活不再影响自转
+      rotateCtl.setBeta(rotateState.beta)
+      // 旋转帧保持 zr 帧循环唤醒（Animation.start 有 _running 重入守卫，零开销）；
+      // zr 静止 10 帧会自休眠，不唤醒的话 control._update 没有舞台，相机不会动
+      rotateCtl.zr?.wakeUp?.()
     },
   })
+}
+
+/** 把 tween 的基准角对齐到相机真实朝向：用户拖拽后 rotateState 已过期，不同步会在恢复自转瞬间跳回旧角度 */
+function syncRotateFromCamera() {
+  const b = rotateCtl ? rotateCtl.getBeta() : liveChart?.getOption()?.geo3D?.[0]?.viewControl?.beta
+  if (typeof b === 'number' && Number.isFinite(b)) rotateState.beta = b
 }
 
 /** 用户开始拖拽/缩放：暂停自转并清掉恢复计时 */
@@ -334,19 +377,30 @@ function pauseRotate() {
   clearTimeout(stillTimer)
 }
 
-/** 用户松手后静止 4 秒，恢复自转 */
+/** 用户松手后静止 4 秒，从相机当前朝向恢复自转 */
 function resumeRotateLater() {
   clearTimeout(stillTimer)
-  stillTimer = setTimeout(() => rotateTl?.resume(), 4000)
+  stillTimer = setTimeout(() => {
+    if (!rotateTl) return
+    // 清掉 OrbitControl 残余拖拽速度：其内部循环每帧会把 _rotateVelocity 再积分回
+    // beta 并 setView 回写模型，速度未衰减完时会和 tween 的写入互相打架
+    rotateCtl?._rotateVelocity?.set?.(0, 0)
+    syncRotateFromCamera()
+    rotateTl.resume()
+  }, 4000)
 }
 
 /** 挂接交互与自转：zrender 监听随 chart.dispose 自动释放 */
 function startAutoRotateWithInteraction() {
   ensureRotate()
+  captureControl()
   const zr = chart.getZr()
   zr.on('mousedown', pauseRotate)
   zr.on('mousewheel', pauseRotate)
   zr.on('mouseup', resumeRotateLater)
+  // 鼠标拖出画布外才松开时 zrender 收不到 mouseup，globalout 兜底恢复计时
+  // （与 echarts-gl OrbitControl 自身的 globalout 处理同一思路）
+  zr.on('globalout', resumeRotateLater)
 }
 
 function playIntro() {
@@ -428,6 +482,13 @@ function finishIntro() {
   // 全量替换（notMerge）强制重建全部区域 mesh——四城高台一定呈现，
   // 不赌 region 级热更新是否生效；事件绑定在 chart 实例上不受影响
   chart.setOption(buildOption(introGeojson, store.cities), true)
+  captureControl() // notMerge 重建换新 control，重捕获后 tween 直驱才落在活相机上
+}
+
+/** 捕获活实例的 OrbitControl：组件模型重建后 view/control 都是新的（自动 id 变更），
+ * 引用必须随重建刷新，否则 tween 会写给已 dispose 的旧相机 */
+function captureControl() {
+  rotateCtl = chart?._componentsViews?.find?.((v) => v?.type === 'geo3D')?._control ?? null
 }
 
 function handleResize() {
@@ -438,6 +499,8 @@ onBeforeUnmount(() => {
   introTl?.kill()
   introTl = null
   clearTimeout(stillTimer)
+  rotateCtl = null
+  liveChart = null
   window.removeEventListener('resize', handleResize)
   chart?.dispose()
   chart = null
