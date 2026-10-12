@@ -87,11 +87,11 @@ function drillTo(city) {
 }
 
 /** 星尘背景：实例化时随机撒一次（位置/大小/闪烁节奏），纯装饰不参与交互 */
-const stars = Array.from({ length: 72 }, () => ({
+const stars = Array.from({ length: 130 }, () => ({
   left: `${(Math.random() * 100).toFixed(2)}%`,
   top: `${(Math.random() * 100).toFixed(2)}%`,
-  width: `${(Math.random() * 1.4 + 0.6).toFixed(2)}px`,
-  height: `${(Math.random() * 1.4 + 0.6).toFixed(2)}px`,
+  width: `${(Math.random() * 1.6 + 0.7).toFixed(2)}px`,
+  height: `${(Math.random() * 1.6 + 0.7).toFixed(2)}px`,
   animationDelay: `${(Math.random() * 6).toFixed(2)}s`,
   animationDuration: `${(Math.random() * 3 + 3).toFixed(2)}s`,
 }))
@@ -572,10 +572,10 @@ onBeforeUnmount(() => {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(42% 55% at 8% 10%, rgba(38, 198, 218, 0.1) 0%, transparent 70%),
-    radial-gradient(40% 50% at 92% 6%, rgba(58, 134, 255, 0.1) 0%, transparent 70%),
-    radial-gradient(45% 55% at 5% 90%, rgba(230, 57, 70, 0.09) 0%, transparent 70%),
-    radial-gradient(42% 52% at 95% 92%, rgba(76, 175, 80, 0.09) 0%, transparent 70%);
+    radial-gradient(46% 60% at 8% 10%, rgba(38, 198, 218, 0.17) 0%, rgba(38, 198, 218, 0.04) 52%, transparent 74%),
+    radial-gradient(44% 55% at 92% 6%, rgba(58, 134, 255, 0.17) 0%, rgba(58, 134, 255, 0.04) 52%, transparent 74%),
+    radial-gradient(48% 58% at 5% 90%, rgba(230, 57, 70, 0.15) 0%, rgba(230, 57, 70, 0.04) 52%, transparent 74%),
+    radial-gradient(46% 56% at 95% 92%, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.04) 52%, transparent 74%);
   animation: nebula-breathe 18s ease-in-out infinite;
 }
 
