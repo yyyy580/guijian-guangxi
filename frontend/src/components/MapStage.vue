@@ -9,6 +9,13 @@
   </div>
 </template>
 
+<script>
+// 模块级单例：开卷动画只在首次进页面播一次，返回省图直接呈现终态。
+// 注意不能用 <script setup> 里的 let——setup 函数体每个组件实例都会重新执行，
+// 组件随下钻/返回反复销毁重建时标志会被重置，动画就会重播
+let introPlayed = false
+</script>
+
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
@@ -271,7 +278,12 @@ onMounted(async () => {
     chart.on('click', onChartClick)
     chart.on('mouseover', onChartMouseOver)
     window.addEventListener('resize', handleResize)
-    playIntro()
+    if (introPlayed) {
+      finishIntro() // 二次进入（返回省图）：跳过开卷动画，直接全量呈现终态
+    } else {
+      introPlayed = true
+      playIntro()
+    }
     // dev 调试句柄：控制台可直接取实例诊断拾取/事件问题
     if (import.meta.env.DEV) window.__mapChart = chart
   } catch (err) {
