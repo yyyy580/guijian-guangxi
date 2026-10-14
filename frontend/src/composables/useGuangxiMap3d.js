@@ -37,12 +37,12 @@ const INTRO_STEP = 2      // 每城间隔（秒）
  * 用户反馈首版青绿感偏重：基底从绿相 #0f4a44 收敛为蓝相 #0c3947，
  * 亮斑/噪点同步去绿转青，整体明度压低一档。
  * （export：城市地图 useCityMap3d 复用同一套视觉语言） */
-export function makeTerrainTexture() {
+export function makeTerrainTexture({ base = '#0c3947' } = {}) {
   const S = 512
   const c = document.createElement('canvas')
   c.width = c.height = S
   const g = c.getContext('2d')
-  g.fillStyle = '#0c3947'
+  g.fillStyle = base
   g.fillRect(0, 0, S, S)
   // 大块地貌斑：暗色山地与亮色盆地交错
   for (let i = 0; i < 46; i++) {
@@ -180,7 +180,7 @@ export function normalizeRingWinding(geojson) {
 export function useGuangxiMap3d() {
   let scene, camera, renderer, labelRenderer, composer, controls, rafId = 0
   let mapRoot = null
-  const layers = {}          // { reflection, ringFx, beams, flights, particles }
+  const layers = {}          // { ringFx, ripple, beams, flights, particles }
   const flowTextures = []
   const rippleRings = []
   const spinLoops = []       // 旋转部件：刻度环 / 亮弧
@@ -225,11 +225,12 @@ export function useGuangxiMap3d() {
     mapRoot.rotation.x = -Math.PI / 2 // 局部 z 轴 = 世界高度轴
     scene.add(mapRoot)
 
-    const terrain = reg(makeTerrainTexture())
-    // 用户反馈首版顶面偏亮偏青：乘色 #c8e8dc→#9ec2ce 压暗一档、
-    // 高光 #2ee6ff→#17556e 收敛 shininess，避免地形整体"绿油油"反光
+    const terrain = reg(makeTerrainTexture({ base: '#1a5568' }))
+    // 顶面明度两轮校准：首版 #c8e8dc 偏亮偏绿（用户反馈青绿感重）压到 #9ec2ce 后，
+    // 真机上顶面与发光侧壁明度断裂，看起来像悬浮在地图后方的一块"暗影"（用户红圈实锤）。
+    // 现提亮回中间档：乘色与纹理基底同步上调，让顶面读作"哑光地形"而非"黑影"
     const plainTop = reg(new THREE.MeshPhongMaterial({
-      color: new THREE.Color('#9ec2ce'), // ×地形纹理 → 深青蓝地貌
+      color: new THREE.Color('#b7d7e2'), // ×地形纹理 → 可读的深青蓝地貌
       map: terrain, shininess: 30, specular: new THREE.Color('#17556e'),
     }))
     const sidePlain = reg(makeSideMaterial(DEPTH_PLAIN))
@@ -243,11 +244,12 @@ export function useGuangxiMap3d() {
       const isFour = !!city
       const depth = isFour ? DEPTH_CITY : DEPTH_PLAIN
 
-      // 四城顶面：城市色压暗 × 地形纹理 → 品牌色地貌；其余市用统一青蓝。
-      // 高光用中性淡青而非城市原色——绿色高光会让南宁顶面"绿得发亮"
+      // 四城顶面：城市色 × 地形纹理 → 品牌色地貌；其余市用统一青蓝。
+      // 高光用中性淡青而非城市原色——绿色高光会让南宁顶面"绿得发亮"。
+      // 压暗比例 0.35→0.18：与地形顶面同步提亮，避免四城顶面沉成暗块
       const topMat = isFour
         ? reg(new THREE.MeshPhongMaterial({
-            color: darken(city.color, 0.35), map: terrain,
+            color: darken(city.color, 0.18), map: terrain,
             shininess: 35, specular: new THREE.Color('#1a6478'),
           }))
         : plainTop
@@ -273,25 +275,10 @@ export function useGuangxiMap3d() {
     })
   }
 
-  // ---------- 倒影（克隆 + 局部 z 镜像 + 渐隐遮罩） ----------
-  function buildReflection() {
-    const refl = mapRoot.clone(true)
-    refl.scale.z = -1
-    refl.traverse((o) => {
-      if (o.isMesh) {
-        o.material = reg(new THREE.MeshBasicMaterial({
-          color: new THREE.Color('#1587c9'), transparent: true, opacity: 0.16, depthWrite: false,
-        }))
-      } else if (o.isLine) o.visible = false
-    })
-    const group = new THREE.Group()
-    group.add(refl)
-    // 渐隐遮罩已删：倒影仅镜像挤出厚度（2.4~5 单位深）且透明度极低，
-    // 原遮罩 170×30 误加 rotation.x=π/2 立成竖板、position.y 又误用平面轴，
-    // 横亘在画面下部形成长方形阴影（用户红圈实锤）
-    layers.reflection = group
-    mapRoot.add(group)
-  }
+  // ---------- 倒影：已删除 ----------
+  // 倒影 = 克隆整个 mapRoot 再 scale.z=-1 镜像，会把"顶面大平面"一并翻到地下，
+  // 在低角度镜头下呈现为一整块暗青色板块浮在网格上（用户红圈实锤"影响观看"）。
+  // 发光侧壁地图本身已有足够的悬浮感，倒影弊大于利，彻底移除。
 
   // ---------- 地面装饰：大刻度弧环 + 细圆 + 旋转亮弧 + 底座光晕 ----------
   function buildGroundFx() {
@@ -636,7 +623,6 @@ export function useGuangxiMap3d() {
     scene.add(grid)
 
     buildMap(geojson, project, cities)
-    buildReflection()
     buildGroundFx()
     buildBeams(cities, project, geojson)
     buildFlights(cities, project, geojson)
