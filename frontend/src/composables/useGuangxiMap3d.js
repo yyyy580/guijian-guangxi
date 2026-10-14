@@ -117,20 +117,6 @@ function makeFlowTexture() {
   return tex
 }
 
-/** 垂直渐隐遮罩：盖住倒影末端，使其融入背景 */
-function makeFadeTexture() {
-  const c = document.createElement('canvas')
-  c.width = 4
-  c.height = 128
-  const g = c.getContext('2d')
-  const grad = g.createLinearGradient(0, 0, 0, 128)
-  grad.addColorStop(0, 'rgba(3,11,26,0)')
-  grad.addColorStop(1, 'rgba(3,11,26,1)')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 4, 128)
-  return new THREE.CanvasTexture(c)
-}
-
 /** 侧壁发光渐变材质：按挤出高度从深蓝过渡到亮青，顶部边缘增亮（冰蓝质感核心） */
 function makeSideMaterial(depth) {
   return new THREE.ShaderMaterial({
@@ -296,13 +282,9 @@ export function useGuangxiMap3d() {
     })
     const group = new THREE.Group()
     group.add(refl)
-    const mask = new THREE.Mesh(
-      reg(new THREE.PlaneGeometry(MAP_SIZE * 1.7, 30)),
-      reg(new THREE.MeshBasicMaterial({ map: reg(makeFadeTexture()), transparent: true, depthWrite: false })),
-    )
-    mask.rotation.x = Math.PI / 2
-    mask.position.y = -15 - DEPTH_CITY
-    group.add(mask)
+    // 渐隐遮罩已删：倒影仅镜像挤出厚度（2.4~5 单位深）且透明度极低，
+    // 原遮罩 170×30 误加 rotation.x=π/2 立成竖板、position.y 又误用平面轴，
+    // 横亘在画面下部形成长方形阴影（用户红圈实锤）
     layers.reflection = group
     mapRoot.add(group)
   }

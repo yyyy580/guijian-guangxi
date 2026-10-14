@@ -70,20 +70,6 @@ function makeFlowTexture() {
   return tex
 }
 
-/** 垂直渐隐遮罩贴图：盖在倒影上，让"镜面"随距离消失 */
-function makeFadeTexture() {
-  const c = document.createElement('canvas')
-  c.width = 4
-  c.height = 128
-  const g = c.getContext('2d')
-  const grad = g.createLinearGradient(0, 0, 0, 128)
-  grad.addColorStop(0, 'rgba(3,11,26,0)')     // 贴近地图底：全透，倒影可见
-  grad.addColorStop(1, 'rgba(3,11,26,1)')     // 远离地图：融进背景，倒影渐隐
-  g.fillStyle = grad
-  g.fillRect(0, 0, 4, 128)
-  return new THREE.CanvasTexture(c)
-}
-
 export function useGuangxiScreen() {
   // Three 核心对象句柄（init 后填充）
   let scene, camera, renderer, labelRenderer, composer, controls, rafId = 0
@@ -187,7 +173,7 @@ export function useGuangxiScreen() {
     })
   }
 
-  // ---------- 倒影：克隆地图 Y 翻转 + 渐隐遮罩 ----------
+  // ---------- 倒影：克隆地图 z 镜像（浅而淡，无需渐隐遮罩） ----------
   function buildReflection() {
     const refl = mapRoot.clone(true)
     refl.scale.z = -1 // 局部 z 即高度轴，镜像即倒影
@@ -200,16 +186,9 @@ export function useGuangxiScreen() {
     })
     const group = new THREE.Group()
     group.add(refl)
-    // 渐隐遮罩：一块带垂直渐变贴图的平面盖在倒影末端，融入背景色
-    const mask = new THREE.Mesh(
-      reg(new THREE.PlaneGeometry(MAP_SIZE * 1.7, 34)),
-      reg(new THREE.MeshBasicMaterial({
-        map: reg(makeFadeTexture()), transparent: true, depthWrite: false,
-      })),
-    )
-    mask.rotation.x = Math.PI / 2 // 平放，法线朝上
-    mask.position.y = -17 - DEPTH // 局部系里倒影向 -z 延伸 17 个单位
-    group.add(mask)
+    // 渐隐遮罩已删：倒影仅镜像挤出厚度（2.2 单位深）且透明度极低，
+    // 原遮罩 170×34 误加 rotation.x=π/2 立成竖板、position.y 又误用平面轴，
+    // 横亘在画面下部形成长方形阴影（用户在首页红圈实锤，大屏同款一并移除）
     layers.reflection = group
     mapRoot.add(group)
   }
