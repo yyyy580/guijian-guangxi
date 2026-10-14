@@ -35,8 +35,9 @@ const INTRO_STEP = 2      // 每城间隔（秒）
 
 /** 程序化地形贴图：深青蓝基底 + 大块明暗地貌斑 + 细噪点，模拟卫星影像质感。
  * 用户反馈首版青绿感偏重：基底从绿相 #0f4a44 收敛为蓝相 #0c3947，
- * 亮斑/噪点同步去绿转青，整体明度压低一档 */
-function makeTerrainTexture() {
+ * 亮斑/噪点同步去绿转青，整体明度压低一档。
+ * （export：城市地图 useCityMap3d 复用同一套视觉语言） */
+export function makeTerrainTexture() {
   const S = 512
   const c = document.createElement('canvas')
   c.width = c.height = S
@@ -80,8 +81,8 @@ function makeTerrainTexture() {
   return tex
 }
 
-/** 径向发光贴图：光柱顶部辉光 / 粒子 / 底座光晕共用 */
-function makeGlowTexture() {
+/** 径向发光贴图：光柱顶部辉光 / 粒子 / 底座光晕共用（export：城市版复用） */
+export function makeGlowTexture() {
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const g = c.getContext('2d')
@@ -117,14 +118,16 @@ function makeFlowTexture() {
   return tex
 }
 
-/** 侧壁发光渐变材质：按挤出高度从深蓝过渡到亮青，顶部边缘增亮（冰蓝质感核心） */
-function makeSideMaterial(depth) {
+/** 侧壁发光渐变材质：按挤出高度从深底过渡到亮顶，顶部边缘增亮（冰蓝质感核心）。
+ * export + 参数化：城市版传入城市主题色；不传参时保持省图原配色 */
+export function makeSideMaterial(depth, { cBottom = '#072d5c', cTop = '#2fa8e8', cEdge = 0x4d8ca6 } = {}) {
   return new THREE.ShaderMaterial({
     transparent: true,
     uniforms: {
       uDepth: { value: depth },
-      cBottom: { value: new THREE.Color('#072d5c') },
-      cTop: { value: new THREE.Color('#2fa8e8') },
+      cBottom: { value: new THREE.Color(cBottom) },
+      cTop: { value: new THREE.Color(cTop) },
+      uEdge: { value: new THREE.Color(cEdge) },
     },
     vertexShader: /* glsl */`
       varying float vH;
@@ -133,12 +136,12 @@ function makeSideMaterial(depth) {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */`
-      uniform float uDepth; uniform vec3 cBottom; uniform vec3 cTop;
+      uniform float uDepth; uniform vec3 cBottom; uniform vec3 cTop; uniform vec3 uEdge;
       varying float vH;
       void main() {
         float t = clamp(vH / uDepth, 0.0, 1.0);
         vec3 col = mix(cBottom, cTop, pow(t, 0.75));
-        col += vec3(0.3, 0.55, 0.65) * smoothstep(0.78, 1.0, t); // 顶部棱线增亮
+        col += uEdge * smoothstep(0.78, 1.0, t); // 顶部棱线增亮
         gl_FragColor = vec4(col, 0.97);
       }`,
   })
@@ -158,8 +161,9 @@ function darken(hex, ratio = 0.55) {
  * 地图不可见、14 市标签/光柱/飞线全部叠在同一个点。
  * 自愈式修复：逐要素检测球面面积，超过半球（2π）即反转该市全部环；
  * THREE.ShapeUtils 对形状/洞的绕向自适应，反转对挤出几何无副作用。
+ * （export：城市级区县数据同源，同样需要归一）
  */
-function normalizeRingWinding(geojson) {
+export function normalizeRingWinding(geojson) {
   for (const f of geojson.features) {
     const g = f.geometry
     if (!g) continue

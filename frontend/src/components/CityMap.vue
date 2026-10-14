@@ -1,6 +1,21 @@
 <template>
   <div class="city-map">
-    <div ref="chartRef" class="map-canvas"></div>
+    <!-- Three.js 画布容器：区县挤出浮雕 + 景点光柱 + 氛围件（视觉与首页省图一致） -->
+    <div ref="stageRef" class="map-canvas" :aria-label="`${city.name}3D地图`"></div>
+
+    <!-- CSS2D 标签层容器：景点名标签（pointer-events none，不挡拖拽/点击） -->
+    <div ref="labelEl" class="label-holder" aria-hidden="true"></div>
+
+    <!-- 景点 hover 跟随提示 -->
+    <div
+      v-show="tooltip.show"
+      class="spot-tip"
+      :style="{ left: tooltip.x + 14 + 'px', top: tooltip.y + 14 + 'px' }"
+    >
+      <b>{{ tooltip.name }}</b>
+      <span>{{ tooltip.summary }}</span>
+      <i>点击查看故事 →</i>
+    </div>
 
     <!-- 景点清单：信息展示 + 100% 可靠的卡片入口（不依赖 3D 拾取） -->
     <aside class="spot-list">
@@ -26,132 +41,52 @@
         <h2 :style="{ color: city.color }">{{ city.fullName }}</h2>
         <p>{{ city.slogan }}</p>
       </div>
-      <p class="hint">左键点击景点标记，查看它的故事</p>
+      <p class="hint">拖动旋转 · 点击景点光柱，查看它的故事</p>
     </header>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import * as echarts from 'echarts'
-import 'echarts-gl'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
-import flags from '@/config/feature.flags'
+import { useCityMap3d } from '@/composables/useCityMap3d'
 
 const props = defineProps({
   city: { type: Object, required: true },
 })
 const store = useAppStore()
-const chartRef = ref(null)
-let chart = null
-
-function darken(hex, ratio = 0.55) {
-  const n = hex.replace('#', '')
-  const f = (i) => Math.round(parseInt(n.slice(i, i + 2), 16) * (1 - ratio))
-  return `rgb(${f(0)},${f(2)},${f(4)})`
-}
-
-function buildOption(geojson) {
-  const spots = store.cityAttractions.map((a) => ({
-    name: a.name,
-    value: [a.coord[0], a.coord[1], 1.2],
-    itemStyle: { color: props.city.color },
-    attractionId: a.id,
-  }))
-
-  return {
-    backgroundColor: 'transparent',
-    tooltip: {
-      backgroundColor: 'rgba(7,19,31,0.92)',
-      borderColor: 'rgba(125,211,252,0.35)',
-      textStyle: { color: '#e8f1f8', fontSize: 13 },
-      formatter: (p) => {
-        const a = store.attractions[p.data?.attractionId]
-        return a ? `<b>${a.name}</b><br/>${a.summary.slice(0, 42)}…<br/><span style="opacity:.65">点击查看故事 →</span>` : ''
-      },
-    },
-    geo3D: {
-      map: props.city.id,
-      regionHeight: 2,
-      shading: 'realistic',
-      realisticMaterial: { roughness: 0.75, metalness: 0.05 },
-      postEffect: { enable: true, bloom: { enable: true, intensity: 0.12 } },
-      light: {
-        main: { intensity: 1.3, shadow: true, alpha: 45, beta: -30 },
-        ambient: { intensity: 0.55 },
-      },
-      boxWidth: 90,
-      itemStyle: { color: darken(props.city.color, 0.75), borderColor: props.city.color, borderWidth: 1.2 },
-      emphasis: { itemStyle: { color: darken(props.city.color, 0.45) } },
-      viewControl: {
-        alpha: 42,
-        beta: 5,
-        distance: 105,
-        minDistance: 50,
-        maxDistance: 180,
-        // echarts-gl geo3D 的 viewControl 默认 minBeta/-maxBeta = ±80，相机写入会被
-        // setBeta 永久钳平（省图自转"转一半停住"的根因）。显式解除，长时自转不撞墙
-        minBeta: -Infinity,
-        maxBeta: Infinity,
-        autoRotate: true,
-        autoRotateSpeed: 2,
-        autoRotateAfterStill: 4,
-      },
-    },
-    series: [
-      {
-        type: 'scatter3D',
-        coordinateSystem: 'geo3D',
-        data: spots,
-        symbolSize: 24,
-        label: {
-          show: true,
-          position: 'top',
-          distance: 8,
-          formatter: (p) => p.name,
-          color: '#ffffff',
-          fontSize: 14,
-          fontWeight: 600,
-          textBorderColor: 'rgba(7,19,31,0.9)',
-          textBorderWidth: 2,
-        },
-        emphasis: { label: { fontSize: 16 }, itemStyle: { color: '#ffffff' } },
-      },
-    ],
-  }
-}
-
-function onChartClick(params) {
-  // 以数据判据识别景点：scatter3D 事件 params.componentType 恒为 'series'，不能按组件名判断
-  if (params.data?.attractionId) {
-    store.openAttraction(store.attractions[params.data.attractionId])
-  }
-}
+const stageRef = ref(null)
+const labelEl = ref(null)
+let api = null
+const tooltip = reactive({ show: false, name: '', summary: '', x: 0, y: 0 })
 
 onMounted(async () => {
+  api = useCityMap3d()
   try {
-    const geojson = await fetch(`/geojson/${props.city.id}.json`).then((r) => r.json())
-    echarts.registerMap(props.city.id, geojson)
-    chart = echarts.init(chartRef.value)
-    chart.setOption(buildOption(geojson))
-    chart.on('click', onChartClick)
-    window.addEventListener('resize', handleResize)
-    if (import.meta.env.DEV) window.__cityChart = chart
+    await api.init(stageRef.value, labelEl.value, {
+      city: props.city,
+      attractions: store.cityAttractions,
+      onPick: (a) => store.openAttraction(a),
+      onHoverSpot: (info) => {
+        tooltip.show = !!info
+        if (info) {
+          tooltip.name = info.attraction.name
+          tooltip.summary = info.attraction.summary.slice(0, 42) + '…'
+          tooltip.x = info.x
+          tooltip.y = info.y
+        }
+      },
+    })
   } catch (err) {
     console.error('城市地图加载失败', err)
-    ElMessage.error(`${props.city.fullName}地图数据加载失败`)
+    ElMessage.error(err?.message || `${props.city.fullName}地图加载失败`)
   }
 })
 
-function handleResize() {
-  chart?.resize()
-}
-
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
+  api?.dispose(stageRef.value, labelEl.value)
+  api = null
 })
 </script>
 
@@ -171,6 +106,49 @@ onBeforeUnmount(() => {
 
 .map-canvas:active {
   cursor: grabbing;
+}
+
+/* CSS2D 标签层宿主：整面覆盖画布但不拦截交互 */
+.label-holder {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ---------- 景点 hover 提示 ---------- */
+.spot-tip {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 260px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  background: rgba(7, 19, 31, 0.9);
+  color: #e8f1f8;
+  font-size: 13px;
+  backdrop-filter: blur(4px);
+}
+
+.spot-tip b {
+  color: var(--city-color, #7dd3fc);
+  letter-spacing: 1px;
+}
+
+.spot-tip span {
+  font-size: 12px;
+  color: rgba(232, 241, 248, 0.72);
+  line-height: 1.5;
+}
+
+.spot-tip i {
+  font-style: normal;
+  font-size: 11px;
+  color: rgba(125, 211, 252, 0.8);
 }
 
 .city-hud {
@@ -280,5 +258,21 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--text-dim);
   margin-left: auto;
+}
+</style>
+
+<style>
+/* CSS2D 景点标签（JS 动态创建，scoped 不生效，必须全局）：
+   白字 + 城市色辉光（--spot-color 由 composable 按城市注入） */
+.gx-spot-label {
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  text-shadow:
+    0 0 8px var(--spot-color, rgba(46, 230, 255, 0.9)),
+    0 0 16px rgba(0, 180, 255, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.65);
 }
 </style>
