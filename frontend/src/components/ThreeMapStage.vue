@@ -11,6 +11,9 @@
     <!-- Three.js 画布容器：广西浮雕挤出地图 + 四城光柱 + 飞线/粒子/倒影/光圈 -->
     <div ref="stageRef" class="map-canvas" aria-label="广西3D地图"></div>
 
+    <!-- CSS2D 标签层容器：14 市白色裸字标签（pointer-events none，不挡地图拖拽/点击） -->
+    <div ref="labelEl" class="label-holder" aria-hidden="true"></div>
+
     <!-- 城市 hover 跟随提示 -->
     <div
       v-show="tooltip.show"
@@ -66,6 +69,7 @@ import flags from '@/config/feature.flags'
 import { useGuangxiMap3d } from '@/composables/useGuangxiMap3d'
 
 const stageRef = ref(null)
+const labelEl = ref(null)
 const store = useAppStore()
 const emit = defineEmits(['drill'])
 const tooltip = reactive({ show: false, name: '', x: 0, y: 0, isFour: false })
@@ -92,7 +96,7 @@ const stars = Array.from({ length: 130 }, () => ({
 onMounted(async () => {
   api = useGuangxiMap3d()
   try {
-    introTl = await api.init(stageRef.value, {
+    introTl = await api.init(stageRef.value, labelEl.value, {
       cities: store.cities,
       skipIntro: introPlayed, // 返回省图：跳过开卷动画直接终态
       onDrill: drillTo,
@@ -116,7 +120,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   introTl?.kill()
   introTl = null
-  api?.dispose(stageRef.value)
+  api?.dispose(stageRef.value, labelEl.value)
   api = null
 })
 </script>
@@ -230,6 +234,14 @@ onBeforeUnmount(() => {
 
 .map-canvas:active {
   cursor: grabbing;
+}
+
+/* CSS2D 标签层宿主：整面覆盖画布但不拦截交互 */
+.label-holder {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 /* ---------- 城市 hover 提示 ---------- */
@@ -368,5 +380,34 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--text-dim);
   letter-spacing: 1px;
+}
+</style>
+
+<style>
+/* CSS2D 标签（JS 动态创建，scoped 样式不生效，必须全局）：
+   白色裸字贴顶面，四城加大加重，青蓝辉光描边 */
+.gx-label-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gx-map-label {
+  color: #eaf6ff;
+  font-size: 12px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  text-shadow:
+    0 0 6px rgba(46, 230, 255, 0.9),
+    0 0 14px rgba(0, 180, 255, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.65);
+}
+
+.gx-map-label.four {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 3px;
 }
 </style>

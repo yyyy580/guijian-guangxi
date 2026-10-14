@@ -17,7 +17,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { geoMercator } from 'd3-geo'
+import { geoMercator, geoArea } from 'd3-geo'
 import gsap from 'gsap'
 
 /** 14 市常住人口（2020 七普，万人）——光柱高度与标签数字的数据源 */
@@ -97,6 +97,23 @@ export function useGuangxiScreen() {
   const disposables = new Set()      // 统一登记 geometry/material/texture，销毁时全量释放
 
   const reg = (x) => (disposables.add(x), x)
+
+  /** 环绕向归一：数据绕向与 d3 球面约定相反时，d3 把每市当成"除该市外的
+   * 整个球面"（geoArea≈4π），fitSize 按全世界定标尺、坐标全部坍缩。
+   * 逐要素检测球面面积，超过半球（2π）即反转该市全部环（自愈，不挑数据源） */
+  function normalizeRingWinding(geojson) {
+    for (const f of geojson.features) {
+      const g = f.geometry
+      if (!g) continue
+      if (geoArea(f) <= Math.PI * 2) continue
+      if (g.type === 'MultiPolygon') {
+        g.coordinates = g.coordinates.map((poly) => poly.map((ring) => ring.slice().reverse()))
+      } else if (g.type === 'Polygon') {
+        g.coordinates = g.coordinates.map((ring) => ring.slice().reverse())
+      }
+    }
+    return geojson
+  }
 
   /** d3-geo 墨卡托投影：GeoJSON 经纬度 → 地图平面坐标（居中，y 已翻转适配 Three） */
   function makeProjector(geojson) {
@@ -393,7 +410,7 @@ export function useGuangxiScreen() {
     try {
       const resp = await fetch(GEO_URL)
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      geojson = await resp.json()
+      geojson = normalizeRingWinding(await resp.json())
       if (!geojson.features?.length) throw new Error('features 为空')
     } catch (err) {
       throw new Error(`广西地图数据加载失败（${GEO_URL}）：${err.message}，请确认 content/geo/450000_full.json 存在`)

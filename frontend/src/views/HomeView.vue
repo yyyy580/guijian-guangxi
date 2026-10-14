@@ -1,13 +1,17 @@
 <template>
   <div class="home">
-    <!-- 三级视图链：广西省图 → 城市地图 → 景点页，同一镜头感转场 -->
+    <!-- 三级视图链：广西省图 → 城市地图 → 景点页，同一镜头感转场。
+         !booting 门控：省图 init 需要完整四城清单匹配点击热区/光柱，
+         过早挂载会让全部网格 city=null、点击落入"敬请期待"分支。
+         坑：CityMap 不能用 v-else 兜底——boot 期间前两分支皆假时它会被
+         带 currentCity=null 渲染出 null.id，必须显式 v-else-if 守卫 -->
     <Transition name="drill" mode="out-in">
-      <ThreeMapStage v-if="!store.currentCity" key="province" @drill="onDrill" />
+      <ThreeMapStage v-if="!store.currentCity && !booting" key="province" @drill="onDrill" />
       <AttractionView
         v-else-if="store.currentAttraction"
         :key="store.currentAttraction.id"
       />
-      <CityMap v-else :key="store.currentCity.id" :city="store.currentCity" />
+      <CityMap v-else-if="store.currentCity" :key="store.currentCity.id" :city="store.currentCity" />
     </Transition>
 
     <!-- 全局知识问答浮窗（不随视图切换销毁，会话保留） -->
