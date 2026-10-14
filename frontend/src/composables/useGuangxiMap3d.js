@@ -33,13 +33,15 @@ const INTRO_STEP = 2      // 每城间隔（秒）
 
 // ---------- 画布纹理工厂（零外部资源） ----------
 
-/** 程序化地形贴图：青绿基底 + 大块明暗地貌斑 + 细噪点，模拟卫星影像质感 */
+/** 程序化地形贴图：深青蓝基底 + 大块明暗地貌斑 + 细噪点，模拟卫星影像质感。
+ * 用户反馈首版青绿感偏重：基底从绿相 #0f4a44 收敛为蓝相 #0c3947，
+ * 亮斑/噪点同步去绿转青，整体明度压低一档 */
 function makeTerrainTexture() {
   const S = 512
   const c = document.createElement('canvas')
   c.width = c.height = S
   const g = c.getContext('2d')
-  g.fillStyle = '#0f4a44'
+  g.fillStyle = '#0c3947'
   g.fillRect(0, 0, S, S)
   // 大块地貌斑：暗色山地与亮色盆地交错
   for (let i = 0; i < 46; i++) {
@@ -48,7 +50,7 @@ function makeTerrainTexture() {
     const r = 30 + Math.random() * 90
     const grad = g.createRadialGradient(x, y, 0, x, y, r)
     const dark = Math.random() > 0.45
-    grad.addColorStop(0, dark ? 'rgba(5,42,40,0.4)' : 'rgba(38,122,102,0.32)')
+    grad.addColorStop(0, dark ? 'rgba(4,32,40,0.4)' : 'rgba(28,105,118,0.26)')
     grad.addColorStop(1, 'rgba(0,0,0,0)')
     g.fillStyle = grad
     g.beginPath()
@@ -58,11 +60,11 @@ function makeTerrainTexture() {
   // 细噪点：地貌颗粒感
   for (let i = 0; i < 3200; i++) {
     const v = Math.random()
-    g.fillStyle = v > 0.5 ? 'rgba(180,255,230,0.05)' : 'rgba(0,20,18,0.07)'
+    g.fillStyle = v > 0.5 ? 'rgba(170,235,255,0.05)' : 'rgba(0,16,22,0.07)'
     g.fillRect(Math.random() * S, Math.random() * S, 1.6, 1.6)
   }
   // 山脊细纹：短弧线模拟等高走势
-  g.strokeStyle = 'rgba(10,60,55,0.25)'
+  g.strokeStyle = 'rgba(8,50,62,0.25)'
   g.lineWidth = 1
   for (let i = 0; i < 60; i++) {
     g.beginPath()
@@ -234,9 +236,11 @@ export function useGuangxiMap3d() {
     scene.add(mapRoot)
 
     const terrain = reg(makeTerrainTexture())
+    // 用户反馈首版顶面偏亮偏青：乘色 #c8e8dc→#9ec2ce 压暗一档、
+    // 高光 #2ee6ff→#17556e 收敛 shininess，避免地形整体"绿油油"反光
     const plainTop = reg(new THREE.MeshPhongMaterial({
-      color: new THREE.Color('#c8e8dc'), // ×地形纹理 → 深青绿地貌
-      map: terrain, shininess: 55, specular: new THREE.Color('#2ee6ff'),
+      color: new THREE.Color('#9ec2ce'), // ×地形纹理 → 深青蓝地貌
+      map: terrain, shininess: 30, specular: new THREE.Color('#17556e'),
     }))
     const sidePlain = reg(makeSideMaterial(DEPTH_PLAIN))
     const sideCity = reg(makeSideMaterial(DEPTH_CITY))
@@ -249,11 +253,12 @@ export function useGuangxiMap3d() {
       const isFour = !!city
       const depth = isFour ? DEPTH_CITY : DEPTH_PLAIN
 
-      // 四城顶面：城市色压暗 × 地形纹理 → 品牌色地貌；其余市用统一青绿
+      // 四城顶面：城市色压暗 × 地形纹理 → 品牌色地貌；其余市用统一青蓝。
+      // 高光用中性淡青而非城市原色——绿色高光会让南宁顶面"绿得发亮"
       const topMat = isFour
         ? reg(new THREE.MeshPhongMaterial({
             color: darken(city.color, 0.35), map: terrain,
-            shininess: 65, specular: new THREE.Color(city.color),
+            shininess: 35, specular: new THREE.Color('#1a6478'),
           }))
         : plainTop
 
@@ -343,12 +348,12 @@ export function useGuangxiMap3d() {
     group.add(arc)
 
     // 底座光晕：地图正下方一团青蓝辉光（发光台面感）。
-    // 尺寸/透明度克制：150→118、0.5→0.22——加色混合叠加 Bloom 会让光晕
+    // 三轮收敛：150→118、0.5→0.22→0.16——加色混合叠加 Bloom 会让光晕
     // 膨胀成铺满全屏的青色圆盘、把地形淹没成剪影（真机截图实锤）
     const glow = new THREE.Mesh(
       reg(new THREE.PlaneGeometry(118, 118)),
       reg(new THREE.MeshBasicMaterial({
-        map: reg(makeGlowTexture()), transparent: true, opacity: 0.22,
+        map: reg(makeGlowTexture()), transparent: true, opacity: 0.16,
         blending: THREE.AdditiveBlending, depthWrite: false,
       })),
     )
@@ -654,8 +659,9 @@ export function useGuangxiMap3d() {
 
     composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    // 阈值 0.3：只让光柱/描边/亮弧等高亮元素泛光，中低亮度的地形不再集体辉光
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.4, 0.3))
+    // 辉光两轮收敛（用户反馈强度偏大）：0.55/0.3 → 0.35/0.38，
+    // 只让光柱顶端/亮弧/描边尖点泛光，地形顶面与侧壁保持哑光质感
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.35, 0.4, 0.38))
     composer.addPass(new OutputPass())
 
     bindPicking(renderer.domElement, handlers)
