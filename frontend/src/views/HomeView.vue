@@ -2,7 +2,7 @@
   <div class="home">
     <!-- 三级视图链：广西省图 → 城市地图 → 景点页，同一镜头感转场 -->
     <Transition name="drill" mode="out-in">
-      <MapStage v-if="!store.currentCity" key="province" @drill="onDrill" />
+      <ThreeMapStage v-if="!store.currentCity" key="province" @drill="onDrill" />
       <AttractionView
         v-else-if="store.currentAttraction"
         :key="store.currentAttraction.id"
@@ -25,7 +25,7 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import MapStage from '@/components/MapStage.vue'
+import ThreeMapStage from '@/components/ThreeMapStage.vue'
 import CityMap from '@/components/CityMap.vue'
 import AttractionView from '@/components/AttractionView.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
