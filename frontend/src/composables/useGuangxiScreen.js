@@ -220,11 +220,12 @@ export function useGuangxiScreen() {
       const ring = new THREE.Mesh(
         reg(new THREE.RingGeometry(1, 1.18, 96)),
         reg(new THREE.MeshBasicMaterial({
-          color: new THREE.Color('#27d8ff'), transparent: true, opacity: 0.55,
+          color: new THREE.Color('#27d8ff'), transparent: true, opacity: 0.3,
           side: THREE.DoubleSide, depthWrite: false,
         })),
       )
-      ring.rotation.x = Math.PI / 2
+      // RingGeometry 局部 +Z 即世界向上（mapRoot 已旋转 -90°），勿再叠加旋转——
+      // 曾因多转 90° 变成正对镜头的巨型圆环，三圈叠 Bloom 糊成吞掉地图的光球
       ring.position.z = -0.8
       ring.userData.phase = i / 3 // 三环相位均分，形成连绵扩散
       rippleRings.push(ring)
@@ -369,10 +370,10 @@ export function useGuangxiScreen() {
   function animate(clock, bloomPass) {
     const t = clock.getElapsedTime()
     dashLoops.forEach((l, i) => { l.rotation.z += (i % 2 ? -1 : 1) * 0.0016 }) // 虚线光圈正反旋转
-    rippleRings.forEach((r) => { // 波纹：0.55→1.9 扩散，透明度随之衰减，循环
-      const p = (t * 0.45 + r.userData.phase) % 1
-      r.scale.setScalar(14 + p * 34)
-      r.material.opacity = 0.5 * (1 - p)
+    rippleRings.forEach((r) => { // 波纹：12→42 扩散，透明度随之衰减，循环
+      const p = (clock.elapsedTime * 0.25 + r.userData.phase) % 1
+      r.scale.setScalar(12 + p * 30)
+      r.material.opacity = 0.3 * (1 - p)
     })
     flowTextures.forEach((tex) => { tex.offset.x -= 0.011 }) // 飞线流光
     if (layers.particles) layers.particles.rotation.z = t * 0.03 // 粒子层缓旋
@@ -444,10 +445,12 @@ export function useGuangxiScreen() {
     buildParticles()
     buildLabels(geojson, project)
 
-    // 后期：Bloom 全局辉光（OutputPass 负责 sRGB 输出，缺了画面会发灰）
+    // 后期：Bloom 全局辉光（OutputPass 负责 sRGB 输出，缺了画面会发灰）。
+    // strength 1.15/threshold 0.08 曾让全场近乎所有像素进辉光、观感刺眼（用户实锤），
+    // 收敛为 0.55/0.4/0.3：光柱与描边保留赛博辉光，地形与标签不再被洗白
     composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 1.15, 0.55, 0.08)
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.4, 0.3)
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
 
