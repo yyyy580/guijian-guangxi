@@ -44,14 +44,19 @@
       </button>
     </nav>
 
-    <!-- 右上数据徽标 -->
-    <aside class="stat-badge" aria-hidden="true">
-      <span><b>4</b> 城市</span>
-      <i></i>
-      <span><b>9</b> 景区</span>
-      <i></i>
-      <span><b>4</b> 层 AI 能力</span>
-    </aside>
+    <!-- 右上：数据大屏入口 + 数据徽标 -->
+    <div class="top-right">
+      <button class="screen-entry" type="button" @click="goScreen">
+        <span class="ico">▦</span> 数据大屏
+      </button>
+      <aside class="stat-badge" aria-hidden="true">
+        <span><b>4</b> 城市</span>
+        <i></i>
+        <span><b>9</b> 景区</span>
+        <i></i>
+        <span><b>4</b> 层 AI 能力</span>
+      </aside>
+    </div>
   </div>
 </template>
 
@@ -63,6 +68,7 @@ let introPlayed = false
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAppStore } from '@/stores/app'
 import flags from '@/config/feature.flags'
@@ -71,10 +77,16 @@ import { useGuangxiMap3d } from '@/composables/useGuangxiMap3d'
 const stageRef = ref(null)
 const labelEl = ref(null)
 const store = useAppStore()
+const router = useRouter()
 const emit = defineEmits(['drill'])
 const tooltip = reactive({ show: false, name: '', x: 0, y: 0, isFour: false })
 let api = null
 let introTl = null
+
+/** 跳转数据大屏（/screen 独立路由，全屏展示人口光柱/飞线/图层开关） */
+function goScreen() {
+  router.push('/screen')
+}
 
 /** 图例条下钻：与地图点击同一条路（selectCity + drill 事件由 HomeView 触发欢迎语） */
 function drillTo(city) {
@@ -323,12 +335,45 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-/* ---------- 右上数据徽标 ---------- */
-.stat-badge {
+/* ---------- 右上：大屏入口 + 数据徽标 ---------- */
+.top-right {
   position: absolute;
   top: 34px;
   right: 36px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.screen-entry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(46, 230, 255, 0.4);
+  background: rgba(7, 19, 31, 0.55);
+  color: #9feaff;
+  font-size: 13px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.screen-entry .ico {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.screen-entry:hover {
+  border-color: rgba(46, 230, 255, 0.85);
+  background: rgba(12, 33, 54, 0.85);
+  box-shadow: 0 0 14px rgba(46, 230, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.stat-badge {
   display: flex;
   align-items: center;
   gap: 12px;
