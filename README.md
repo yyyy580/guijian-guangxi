@@ -23,8 +23,9 @@
 
 ```
 guijian-guangxi/
-├─ frontend/    Vue3 + Vite + Pinia + Element Plus + ECharts GL + GSAP
-│               ├─ 两级 3D 地图下钻（四色光柱 / 景点标记均为可点选目标）
+├─ frontend/    Vue3 + Vite + Pinia + Element Plus + Three.js + GSAP
+│               ├─ 三级整页下钻：广西浮雕省图 → 城市区县地图（区县凸台/景点光柱）→ 景点详情
+│               ├─ 数据大屏 /screen（挤出地图 + 人口光柱 + 飞线 + CSS2D 标牌）
 │               ├─ SSE 流式问答与讲解（字幕只增不减，语音逐句投喂）
 │               └─ feature.flags 功能开关（任何不稳定功能一键隐藏，作品照样完整）
 ├─ backend/     Spring Boot 3 + Java 虚拟线程
@@ -49,16 +50,18 @@ npm run dev
 
 ### 后端（端口 8080）
 
+首选（Windows 双击即可，交互式粘贴 Key）：
+
 ```bash
 cd backend
-./start-backend.ps1    # 首选：交互式粘贴 Key 后启动（Windows PowerShell）
+./启动后端.bat
 ```
 
-或手动方式：
+或 PowerShell 脚本 / 手动方式：
 
 ```bash
 cd backend
-mvn spring-boot:run
+./start-backend.ps1    # 或直接: mvn spring-boot:run
 ```
 
 ### 接入真实 AI（智谱开放平台）

@@ -5,7 +5,7 @@
  */
 export default {
   // --- P0 地图 ---
-  map3D: true,          // 3D 浮雕地图（ECharts GL）
+  map3D: true,          // 3D 浮雕地图（Three.js：省图 + 四城地图 + 数据大屏）
   map2DFallback: true,  // 2D SVG 降级地图（答辩无 WebGL 时切换）
 
   // --- P1 骨肉 ---
